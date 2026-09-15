@@ -261,6 +261,13 @@
   .qitem.shown{ opacity: .55; }
   .qitem .n{ flex: none; font-weight: 800; color: var(--naranja); }
   .qitem .txt b{ display: block; color: #fff; font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .qitem .txt{ flex: 1 1 auto; min-width: 0; }
+  .qfocus{
+    flex: none; align-self: center; cursor: pointer; font-size: 16px; line-height: 1;
+    padding: 5px 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.04); opacity: .55; transition: opacity .15s, background .15s, border-color .15s;
+  }
+  .qfocus:hover{ opacity: 1; background: rgba(246,160,26,.16); border-color: var(--naranja); }
   .control .foot-actions{ padding: 12px 20px; border-top: 1px solid rgba(255,255,255,.08); display: flex; gap: 8px; }
   .foco-only{ display: none; }
   body[data-modo="foco"] .foco-only{ display: flex; }
@@ -577,9 +584,8 @@
       el.innerHTML = '<div class="card"><div class="btxt">'+esc(w.q.pregunta)+'</div>'+author+'</div>';
       swarmEl.appendChild(el);
       var bw = el.offsetWidth || 260, bh = el.offsetHeight || 120;
-      var x = rand(marginX(), Math.max(marginX(), leftMax() - bw));
-      var y = rand(topMin(), Math.max(topMin(), H - bh - marginY()));
-      var b = { id:w.id, el:el, x:x, y:y, tx:x, ty:y, w:bw, h:bh };
+      var b = { id:w.id, el:el, x:0, y:0, tx:0, ty:0, w:bw, h:bh };
+      var p = randomPos(b); b.x = p.x; b.y = p.y;
       newTarget(b);
       bubbles.push(b);
       requestAnimationFrame(function(){ el.classList.add('in'); }); // entrada chica -> normal
@@ -599,28 +605,62 @@
     if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
   }
   function rand(a,b){ return a + Math.random()*(b-a); }
-  function marginX(){ return window.innerWidth*0.026; }
+  function marginX(){ return window.innerWidth*0.02; }
   function marginY(){ return window.innerHeight*0.05; }
-  function topMin(){ return window.innerHeight*0.14; } // deja libre el header
-  function leftMax(){ return window.innerWidth*0.5; }  // mitad izquierda
-  // elegir un nuevo destino aleatorio dentro de la mitad izquierda
-  function newTarget(b){
-    var H = window.innerHeight;
-    b.tx = rand(marginX(), Math.max(marginX(), leftMax() - b.w));
-    b.ty = rand(topMin(), Math.max(topMin(), H - b.h - marginY()));
+  function topMin(){ return window.innerHeight*0.15; } // deja libre el header (arriba)
+  function xMax(bw){ return window.innerWidth - marginX() - bw; } // ahora llega hasta la derecha
+  // zona reservada abajo-derecha donde está el QR (para no taparlo)
+  function inQRZone(x,y,w,h){
+    if (estado.qr === false) return false;
+    var zx = window.innerWidth*0.62, zy = window.innerHeight*0.58;
+    return (x + w) > zx && (y + h) > zy;
   }
+  // una posición aleatoria válida dentro de todo el lienzo (evitando header y QR)
+  function randomPos(b){
+    var H = window.innerHeight;
+    for (var k=0;k<10;k++){
+      var x = rand(marginX(), Math.max(marginX(), xMax(b.w)));
+      var y = rand(topMin(), Math.max(topMin(), H - b.h - marginY()));
+      if (!inQRZone(x, y, b.w, b.h)) return { x:x, y:y };
+    }
+    return { x: marginX(), y: topMin() }; // fallback: arriba a la izquierda
+  }
+  function newTarget(b){ var p = randomPos(b); b.tx = p.x; b.ty = p.y; }
 
   var EASE_K = 0.55;   // más chico = más lento
+  var GAP = 22;        // separación mínima extra entre burbujas (px)
   function ensureRaf(){ if (!rafId){ lastT = performance.now(); rafId = requestAnimationFrame(step); } }
   function step(t){
     var dt = Math.min(0.05, (t - lastT)/1000); lastT = t;
     var ease = 1 - Math.exp(-EASE_K * dt);   // suave, independiente del framerate
-    for (var i=0;i<bubbles.length;i++){
-      var b = bubbles[i];
+    var i, j, b, H = window.innerHeight;
+    // 1) deriva lenta hacia el destino (sin rebote)
+    for (i=0;i<bubbles.length;i++){
+      b = bubbles[i];
       b.x += (b.tx - b.x) * ease;
       b.y += (b.ty - b.y) * ease;
-      // al acercarse al destino, elegir otro -> deriva lenta y continua, sin rebote
       if (Math.abs(b.tx-b.x) < 24 && Math.abs(b.ty-b.y) < 24) newTarget(b);
+    }
+    // 2) separación: empujar las que se solapan para que no se amontonen
+    for (i=0;i<bubbles.length;i++){
+      for (j=i+1;j<bubbles.length;j++){
+        var a = bubbles[i], c = bubbles[j];
+        var dx = (a.x+a.w/2) - (c.x+c.w/2), dy = (a.y+a.h/2) - (c.y+c.h/2);
+        var ox = (a.w+c.w)/2 + GAP - Math.abs(dx);
+        var oy = (a.h+c.h)/2 + GAP - Math.abs(dy);
+        if (ox > 0 && oy > 0){
+          var dist = Math.hypot(dx,dy) || 1, push = Math.min(ox,oy) * 0.5;
+          var ux = dx/dist, uy = dy/dist;
+          a.x += ux*push*0.5; a.y += uy*push*0.5;
+          c.x -= ux*push*0.5; c.y -= uy*push*0.5;
+        }
+      }
+    }
+    // 3) clamp a la región y pintar
+    for (i=0;i<bubbles.length;i++){
+      b = bubbles[i];
+      b.x = Math.max(marginX(), Math.min(b.x, xMax(b.w)));
+      b.y = Math.max(topMin(), Math.min(b.y, H - marginY() - b.h));
       b.el.style.transform = 'translate3d('+b.x.toFixed(1)+'px,'+b.y.toFixed(1)+'px,0)';
     }
     if (bubbles.length) rafId = requestAnimationFrame(step); else rafId = null;
@@ -628,7 +668,7 @@
   window.addEventListener('resize', function(){
     var H = window.innerHeight;
     bubbles.forEach(function(b){
-      b.x = Math.max(marginX(), Math.min(b.x, leftMax()-b.w));
+      b.x = Math.max(marginX(), Math.min(b.x, xMax(b.w)));
       b.y = Math.max(topMin(), Math.min(b.y, H - marginY() - b.h));
       newTarget(b);
     });
@@ -698,12 +738,22 @@
       var cls = 'qitem' + (active ? (isFoco?' active':' floating') : '') + (shown.has(i)?' shown':'');
       var autor = q.alumno ? '<b>'+esc(q.alumno)+'</b>' : '';
       var dot = isFoco ? '' : '<span class="fdot"></span>';
-      return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span></button>';
+      var focoBtn = '<span class="qfocus" data-foco="'+i+'" title="Hacer foco en esta pregunta">🎯</span>';
+      return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span>'+focoBtn+'</button>';
     }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.qitem'), function(el){
       el.addEventListener('click', function(){
         var i = parseInt(el.getAttribute('data-i'),10);
         if (estado.modo === 'foco') show(i); else toggleFloat(i);
+      });
+    });
+    // botón 🎯: hace foco en esa pregunta (aunque esté flotando)
+    Array.prototype.forEach.call(list.querySelectorAll('.qfocus'), function(el){
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var i = parseInt(el.getAttribute('data-foco'),10);
+        if (estado.modo !== 'foco') setModo('foco');
+        show(i);
       });
     });
   }
