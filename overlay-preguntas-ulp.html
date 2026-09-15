@@ -8,13 +8,19 @@
 <style>
   /* =====================================================================
      Overlay ULP — Preguntas de alumnos (para OBS)
-     - Sin marca ni colores de Gestioo. Identidad: logo ULP (blanco+naranja
-       #f6a01a) sobre fondo oscuro.
-     - Dos vistas sincronizadas (BroadcastChannel + localStorage):
-         ?vista=control  -> panel operador (cargar/editar/elegir pregunta)
-         ?vista=display   -> overlay limpio para OBS (window capture)
+     - Identidad: logo ULP (blanco+naranja #f6a01a).
+     - DOS vistas que se sincronizan A TRAVÉS DEL WORKER (funcionan en
+       navegadores distintos, incluso el navegador interno de OBS):
+         ?vista=control  -> panel operador (elige clase/tema/modo/pregunta)
+         ?vista=display  -> overlay para OBS (Browser Source)
        (sin parámetro = control)
-     - Preguntas: se cargan desde una URL de GitHub (JSON). Ver panel.
+     - El display hace polling a  <worker>/list  (preguntas) y
+       <worker>/state (qué mostrar). El panel escribe el estado con POST.
+     - DOS MODOS de display:
+         enjambre -> todas las preguntas como burbujas chicas que flotan
+                     con deriva aleatoria sobre la MITAD IZQUIERDA.
+         foco     -> una sola pregunta destacada.
+     - Para superponer sobre la cámara en OBS: ?vista=display&bg=transparente
      ===================================================================== */
 
   :root{
@@ -39,135 +45,171 @@
 
   /* ---------------- DISPLAY (lo que ve OBS) ---------------- */
   .display{
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    padding: 4.2vh 5vw;
+    position: absolute; inset: 0; overflow: hidden;
     background:
       radial-gradient(1200px 700px at 82% -10%, rgba(246,160,26,.16), transparent 60%),
       radial-gradient(900px 700px at 8% 110%, rgba(246,160,26,.08), transparent 55%),
       linear-gradient(160deg, var(--bg-1), var(--bg-2));
-    overflow: hidden;
   }
   body[data-bg="transparente"] .display{ background: transparent; }
   body[data-bg="transparente"] .fx{ display: none; }
 
-  /* textura/acento animado sutil */
-  .fx{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  /* textura/acento animado sutil (se oculta en transparente) */
+  .fx{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
   .fx::before, .fx::after{
     content: ""; position: absolute; border-radius: 50%;
-    background: radial-gradient(circle, rgba(246,160,26,.22), transparent 70%);
-    filter: blur(30px);
+    background: radial-gradient(circle, rgba(246,160,26,.18), transparent 70%);
+    filter: blur(34px);
   }
-  .fx::before{ width: 520px; height: 520px; top: -160px; right: -120px; animation: float1 14s var(--ease) infinite; }
-  .fx::after{ width: 420px; height: 420px; bottom: -160px; left: -100px; animation: float2 18s var(--ease) infinite; }
-  @keyframes float1{ 50%{ transform: translate(-40px, 60px) scale(1.1); } }
-  @keyframes float2{ 50%{ transform: translate(50px, -40px) scale(1.15); } }
+  .fx::before{ width: 500px; height: 500px; top: -160px; left: -120px; animation: float1 16s var(--ease) infinite; }
+  .fx::after{ width: 420px; height: 420px; bottom: -160px; left: 20%; animation: float2 20s var(--ease) infinite; }
+  @keyframes float1{ 50%{ transform: translate(50px, 60px) scale(1.1); } }
+  @keyframes float2{ 50%{ transform: translate(40px, -50px) scale(1.12); } }
 
-  /* encabezado: logo ULP + clase + tema */
+  /* -------- encabezado DISCRETO: logo ULP + clase + tema -------- */
   .top{
-    position: relative; z-index: 2;
-    display: flex; align-items: center; gap: 2.4vw;
+    position: absolute; top: 2.4vh; left: 2.6vw; z-index: 6;
+    display: flex; align-items: center; gap: 1.1vw;
+    opacity: .92;
+    text-shadow: 0 2px 14px rgba(0,0,0,.55);
   }
-  .brand{ display: flex; align-items: center; gap: 22px; flex: none; }
-  .brand img{ height: 9vh; min-height: 66px; width: auto; display: block; }
-  .brand .divider{ width: 2px; height: 8vh; min-height: 60px; background: linear-gradient(var(--naranja), transparent); border-radius: 2px; opacity: .8; }
-  .meta{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .brand{ display: flex; align-items: center; gap: 14px; flex: none; }
+  .brand img{ height: 4.6vh; min-height: 40px; max-height: 58px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,.5)); }
+  .brand .divider{ width: 2px; height: 4.4vh; min-height: 34px; background: linear-gradient(var(--naranja), transparent); border-radius: 2px; opacity: .7; }
+  .meta{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .meta .clase{
-    font-size: clamp(1.7rem, 2.3vw, 2.6rem);
-    font-weight: 800; line-height: 1.05; letter-spacing: -.01em;
-    color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,.4);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: clamp(1rem, 1.35vw, 1.55rem);
+    font-weight: 700; line-height: 1.1; letter-spacing: -.01em; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34vw;
   }
+  .meta .clase:empty, .meta .tema:empty{ display: none; }
   .meta .tema{
-    display: inline-flex; align-items: center; gap: 12px;
-    font-size: clamp(1.05rem, 1.35vw, 1.55rem); font-weight: 600; color: var(--naranja-2);
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: clamp(.8rem, 1vw, 1.1rem); font-weight: 600; color: var(--naranja-2);
   }
   .meta .tema::before{
-    content: ""; width: 12px; height: 12px; border-radius: 3px;
-    background: var(--naranja); box-shadow: 0 0 16px var(--naranja);
+    content: ""; width: 9px; height: 9px; border-radius: 3px; flex: none;
+    background: var(--naranja); box-shadow: 0 0 12px var(--naranja);
   }
   .live{
-    margin-left: auto; flex: none;
-    display: inline-flex; align-items: center; gap: 12px;
-    padding: 10px 20px; border-radius: 999px;
-    background: rgba(246,160,26,.14); border: 1px solid rgba(246,160,26,.4);
-    font-size: clamp(.95rem, 1.1vw, 1.25rem); font-weight: 700; color: var(--naranja-2);
+    display: inline-flex; align-items: center; gap: 8px; flex: none;
+    padding: 5px 13px; border-radius: 999px; margin-left: 6px;
+    background: rgba(246,160,26,.12); border: 1px solid rgba(246,160,26,.35);
+    font-size: clamp(.62rem, .78vw, .9rem); font-weight: 700; color: var(--naranja-2);
     text-transform: uppercase; letter-spacing: .12em;
   }
-  .live .dot{ width: 12px; height: 12px; border-radius: 50%; background: var(--naranja); box-shadow: 0 0 0 0 rgba(246,160,26,.7); animation: pulse 1.8s infinite; }
-  @keyframes pulse{ 70%{ box-shadow: 0 0 0 14px rgba(246,160,26,0); } 100%{ box-shadow: 0 0 0 0 rgba(246,160,26,0); } }
+  .live .dot{ width: 9px; height: 9px; border-radius: 50%; background: var(--naranja); box-shadow: 0 0 0 0 rgba(246,160,26,.7); animation: pulse 1.8s infinite; }
+  @keyframes pulse{ 70%{ box-shadow: 0 0 0 11px rgba(246,160,26,0); } 100%{ box-shadow: 0 0 0 0 rgba(246,160,26,0); } }
+  body[data-vista="display"] .top.hide-when-empty{ }
 
-  /* zona central: tarjeta de la pregunta */
-  .stage{
-    position: relative; z-index: 2;
-    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
-    min-height: 0; padding: 3vh 0 1vh;
+  /* -------- ENJAMBRE: burbujas flotando sobre la mitad izquierda -------- */
+  .swarm{ position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .bubble{ position: absolute; top: 0; left: 0; will-change: transform; }
+  .bubble .card{
+    max-width: 24vw; min-width: 8vw;
+    background: rgba(10,19,34,.60);
+    border: 1px solid rgba(246,160,26,.35);
+    border-left: 5px solid var(--naranja);
+    border-radius: 16px;
+    padding: 1.05vh 1.15vw 1.1vh;
+    box-shadow: 0 16px 40px rgba(0,0,0,.42);
+    backdrop-filter: blur(7px) saturate(130%);
+    transform: scale(.4); opacity: 0; transform-origin: left center;
+    transition: transform .6s var(--ease), opacity .5s var(--ease);
   }
+  .bubble.in .card{ transform: scale(1); opacity: 1; }
+  .bubble .btxt{
+    font-size: clamp(.86rem, 1.04vw, 1.28rem);
+    font-weight: 600; line-height: 1.28; color: #fff;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
+  }
+  .bubble .bauthor{
+    margin-top: .6vh; display: inline-flex; align-items: center; gap: 8px;
+    font-size: clamp(.66rem, .82vw, .98rem); font-weight: 600; color: var(--naranja-2);
+  }
+  .bubble .bauthor::before{
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--naranja); flex: none;
+  }
+  .bubble .bauthor.empty{ display: none; }
+
+  /* -------- FOCO: una pregunta destacada (lado izquierdo) -------- */
+  .focusstage{
+    position: absolute; z-index: 4;
+    top: 12vh; left: 2.6vw; width: 56vw; height: 76vh;
+    display: none; align-items: center; justify-content: flex-start;
+  }
+  body[data-modo="foco"] .focusstage{ display: flex; }
+  body[data-modo="foco"] .swarm{ display: none; }
   .qcard{
-    width: 100%; max-width: 1500px;
-    background: var(--card);
+    width: 100%;
+    background: rgba(10,19,34,.66);
     border: 1px solid var(--card-border);
     border-left: 10px solid var(--naranja);
-    border-radius: 28px;
-    padding: 5vh 5vw;
-    box-shadow: 0 40px 90px rgba(0,0,0,.45);
-    backdrop-filter: blur(8px);
+    border-radius: 26px;
+    padding: 4.4vh 3.4vw;
+    box-shadow: 0 34px 80px rgba(0,0,0,.5);
+    backdrop-filter: blur(9px) saturate(130%);
   }
-  .qcard .qhead{ display: flex; align-items: center; gap: 18px; margin-bottom: 3vh; }
+  .qcard .qhead{ display: flex; align-items: center; gap: 16px; margin-bottom: 2.4vh; }
   .qcard .qnum{
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 62px; height: 62px; padding: 0 16px; border-radius: 16px;
+    min-width: 56px; height: 56px; padding: 0 14px; border-radius: 15px;
     background: linear-gradient(160deg, var(--naranja), #e08800);
-    color: #1a1204; font-weight: 800; font-size: 1.6rem;
+    color: #1a1204; font-weight: 800; font-size: 1.5rem;
     box-shadow: 0 12px 26px rgba(246,160,26,.4);
   }
-  .qcard .qlabel{ font-size: clamp(1rem, 1.15vw, 1.3rem); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+  .qcard .qlabel{ font-size: clamp(.95rem, 1.1vw, 1.25rem); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
   .qcard .qtext{
-    font-size: clamp(2rem, 3.4vw, 4.2rem);
-    font-weight: 700; line-height: 1.18; color: #fff;
-    letter-spacing: -.01em;
+    font-size: clamp(1.9rem, 3vw, 3.7rem);
+    font-weight: 700; line-height: 1.2; color: #fff; letter-spacing: -.01em;
   }
   .qcard .qauthor{
-    margin-top: 3.4vh; display: inline-flex; align-items: center; gap: 14px;
-    font-size: clamp(1.15rem, 1.5vw, 1.9rem); font-weight: 600; color: var(--naranja-2);
+    margin-top: 2.8vh; display: inline-flex; align-items: center; gap: 13px;
+    font-size: clamp(1.1rem, 1.45vw, 1.8rem); font-weight: 600; color: var(--naranja-2);
   }
   .qcard .qauthor::before{
-    content: ""; width: 42px; height: 42px; border-radius: 50%; flex: none;
-    background: rgba(246,160,26,.18) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23ffb648" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>') center/22px no-repeat;
+    content: ""; width: 40px; height: 40px; border-radius: 50%; flex: none;
+    background: rgba(246,160,26,.18) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23ffb648" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>') center/21px no-repeat;
     border: 1px solid rgba(246,160,26,.4);
   }
   .qcard .qauthor.empty{ display: none; }
 
-  /* estado en espera (sin pregunta visible) */
-  .waiting{
-    text-align: center; color: var(--ink-soft);
-  }
-  .waiting .big{ font-size: clamp(2rem, 3vw, 3.4rem); font-weight: 800; color: #fff; margin-bottom: 14px; }
-  .waiting .sub{ font-size: clamp(1.1rem, 1.4vw, 1.6rem); font-weight: 500; }
-  .waiting svg{ width: clamp(70px, 7vw, 120px); height: auto; margin-bottom: 3vh; opacity: .9; }
+  /* estado en espera (foco sin pregunta) */
+  .waiting{ text-align: left; color: var(--ink-soft); }
+  .waiting .big{ font-size: clamp(1.7rem, 2.6vw, 3rem); font-weight: 800; color: #fff; margin-bottom: 12px; }
+  .waiting .sub{ font-size: clamp(1rem, 1.3vw, 1.5rem); font-weight: 500; }
+  .waiting svg{ width: clamp(56px, 5.4vw, 96px); height: auto; margin-bottom: 2.4vh; opacity: .9; }
 
-  /* animación de entrada de la pregunta */
   .anim-in{ animation: qin .55s var(--ease) both; }
-  @keyframes qin{ from{ opacity: 0; transform: translateY(40px) scale(.97); } to{ opacity: 1; transform: none; } }
+  @keyframes qin{ from{ opacity: 0; transform: translateY(34px) scale(.97); } to{ opacity: 1; transform: none; } }
 
-  /* pie */
-  .foot{
-    position: relative; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between;
-    color: var(--ink-soft); font-size: clamp(.9rem, 1vw, 1.15rem); font-weight: 500;
+  /* -------- QR al formulario (abajo derecha) -------- */
+  .qrbox{
+    position: absolute; right: 2.6vw; bottom: 3.2vh; z-index: 7;
+    display: flex; align-items: center; gap: 15px;
+    padding: 1.2vh 1.1vw; border-radius: 18px;
+    background: rgba(10,19,34,.66);
+    border: 1px solid rgba(246,160,26,.35);
+    box-shadow: 0 16px 40px rgba(0,0,0,.42);
+    backdrop-filter: blur(7px) saturate(130%);
   }
-  .foot .count{ display: inline-flex; align-items: center; gap: 10px; }
-  .foot .count b{ color: #fff; }
+  .qrbox img{
+    width: 12vh; min-width: 96px; max-width: 160px; height: auto; display: block;
+    background: #fff; border-radius: 10px; padding: 6px;
+  }
+  .qrcap{ font-size: clamp(.9rem, 1.2vw, 1.4rem); font-weight: 700; color: #fff; line-height: 1.18; }
+  .qrcap b{ color: var(--naranja-2); }
+  body[data-qr="0"] .qrbox{ display: none; }
 
   /* ---------------- PANEL DE CONTROL ---------------- */
-  body[data-vista="display"] .control{ display: none; }
+  body[data-vista="display"] .control,
+  body[data-vista="display"] .toggle-panel{ display: none !important; }
   .control{
     position: fixed; top: 0; right: 0; z-index: 50;
-    width: 440px; max-width: 42vw; height: 100%;
+    width: 460px; max-width: 44vw; height: 100%;
     background: #0a1322; border-left: 1px solid rgba(255,255,255,.1);
     box-shadow: -20px 0 60px rgba(0,0,0,.5);
-    display: flex; flex-direction: column;
-    font-size: 14px;
+    display: flex; flex-direction: column; font-size: 14px;
   }
   .control h2{ font-size: 15px; font-weight: 800; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px; }
   .control h2 .tag{ font-size: 10px; font-weight: 700; color: var(--naranja); border: 1px solid rgba(246,160,26,.5); padding: 2px 8px; border-radius: 999px; letter-spacing: .1em; }
@@ -190,6 +232,14 @@
   .btn.primary{ background: linear-gradient(160deg, var(--naranja), #e08800); color: #1a1204; }
   .btn.primary:hover{ background: linear-gradient(160deg, var(--naranja-2), var(--naranja)); }
   .btn.ghost{ background: transparent; border: 1px solid rgba(255,255,255,.18); }
+  /* segmento modo */
+  .modo{ display: flex; gap: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; overflow: hidden; }
+  .modo button{
+    flex: 1 1 0; padding: 11px 10px; border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-soft);
+    background: #0f1c30; transition: background .15s, color .15s;
+  }
+  .modo button.on{ background: linear-gradient(160deg, var(--naranja), #e08800); color: #1a1204; }
   .hint{ font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
   .hint code{ background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 5px; font-size: 11.5px; }
   .status{ font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 8px; }
@@ -210,15 +260,20 @@
   .qitem .n{ flex: none; font-weight: 800; color: var(--naranja); }
   .qitem .txt b{ display: block; color: #fff; font-size: 12px; font-weight: 700; margin-bottom: 2px; }
   .control .foot-actions{ padding: 12px 20px; border-top: 1px solid rgba(255,255,255,.08); display: flex; gap: 8px; }
+  .foco-only{ display: none; }
+  body[data-modo="foco"] .foco-only{ display: flex; }
+  .enjambre-only{ display: none; }
+  body[data-modo="enjambre"] .enjambre-only{ display: flex; }
+  .qitem.floating{ border-color: var(--naranja); background: rgba(246,160,26,.16); }
+  .qitem .fdot{ flex:none; width:9px; height:9px; border-radius:50%; border:1px solid rgba(246,160,26,.6); align-self:center; }
+  .qitem.floating .fdot{ background: var(--naranja); box-shadow:0 0 8px var(--naranja); }
 
-  /* botón flotante para abrir/cerrar el panel (solo vista control) */
   .toggle-panel{
     position: fixed; top: 16px; right: 16px; z-index: 60;
-    width: 46px; height: 46px; border-radius: 12px; border: none; cursor: pointer;
+    width: 46px; height: 46px; border-radius: 12px; cursor: pointer;
     background: rgba(10,19,34,.9); color: var(--naranja); border: 1px solid rgba(246,160,26,.4);
     font-size: 20px; display: none; align-items: center; justify-content: center;
   }
-  body[data-vista="display"] .toggle-panel{ display: none !important; }
   body.panel-hidden .control{ display: none; }
   body.panel-hidden .toggle-panel{ display: flex; }
 </style>
@@ -235,20 +290,23 @@
         <div class="divider"></div>
       </div>
       <div class="meta">
-        <span class="clase" id="dClase">Nombre de la clase</span>
-        <span class="tema" id="dTema">Tema de hoy</span>
+        <span class="clase" id="dClase"></span>
+        <span class="tema" id="dTema"></span>
       </div>
       <span class="live"><span class="dot"></span> En vivo</span>
     </header>
 
-    <main class="stage" id="stage">
-      <!-- se rellena por JS: .qcard o .waiting -->
-    </main>
+    <!-- enjambre: burbujas flotando -->
+    <div class="swarm" id="swarm"></div>
 
-    <footer class="foot">
-      <span class="count" id="dCount"></span>
-      <span>Preguntas de los alumnos · #ULP</span>
-    </footer>
+    <!-- foco: una pregunta -->
+    <div class="focusstage" id="focusstage"></div>
+
+    <!-- QR al formulario de preguntas (abajo a la derecha, lejos de las burbujas) -->
+    <div class="qrbox" id="qrbox">
+      <img src="qr-preguntas.svg" alt="QR para hacer preguntas">
+      <div class="qrcap">Escaneá y<br><b>hacé tu pregunta</b></div>
+    </div>
   </div>
 
   <!-- ===================== PANEL DE CONTROL ===================== -->
@@ -259,28 +317,21 @@
     <div class="body">
 
       <div class="field">
-        <label>URL del Worker (API) — recomendado</label>
+        <label>URL del Worker (API)</label>
         <input id="inWorker" type="text" placeholder="https://ulp-preguntas.tu-usuario.workers.dev" spellcheck="false">
       </div>
       <div class="field">
-        <label>URL de GitHub raw/blob (respaldo si no usás Worker)</label>
-        <input id="inGithub" type="text" placeholder="https://github.com/usuario/repo/blob/main/preguntas.json" spellcheck="false">
+        <label>Clave de operador (ADMIN_KEY)</label>
+        <input id="inAdmin" type="password" placeholder="clave definida en el Worker" autocomplete="off">
       </div>
       <div class="row">
-        <button class="btn primary" id="btnCargar">Cargar preguntas</button>
+        <button class="btn primary" id="btnCargar">Conectar / Cargar</button>
         <button class="btn ghost" id="btnRecargar" title="Volver a leer">↻</button>
       </div>
       <label class="autolbl" style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);cursor:pointer;">
-        <input id="inAuto" type="checkbox" style="width:auto"> Auto-actualizar cada 10 s (para ver preguntas nuevas)
+        <input id="inAuto" type="checkbox" style="width:auto"> Auto-actualizar cada 10 s (ver preguntas nuevas)
       </label>
-      <div id="status" class="status info">Cargá desde el Worker (siempre fresco) o desde la URL de GitHub.</div>
-
-      <div class="sep"></div>
-      <div class="field">
-        <label>Clave de operador (ADMIN_KEY, para vaciar)</label>
-        <input id="inAdmin" type="password" placeholder="clave definida en el Worker" autocomplete="off">
-      </div>
-      <button class="btn" id="btnVaciar" style="background:#5a1e1e">🗑 Vaciar todas las preguntas (GitHub)</button>
+      <div id="status" class="status info">Pegá la URL del Worker y tu clave, y tocá «Conectar».</div>
 
       <div class="sep"></div>
 
@@ -295,24 +346,46 @@
 
       <div class="sep"></div>
 
-      <div class="row">
+      <div class="field">
+        <label>Modo del overlay</label>
+        <div class="modo" id="modo">
+          <button data-modo="enjambre" class="on">🫧 Flotando</button>
+          <button data-modo="foco">🎯 Una en foco</button>
+        </div>
+        <span class="hint">Flotando: flotan SOLO las preguntas que elijas, con movimiento lento. Foco: mostrás una sola destacada.</span>
+      </div>
+
+      <label class="autolbl" style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);cursor:pointer;">
+        <input id="inQR" type="checkbox" style="width:auto"> Mostrar QR del formulario en el overlay
+      </label>
+
+      <!-- controles solo para modo foco -->
+      <div class="row foco-only">
         <button class="btn" id="btnPrev">◀ Anterior</button>
         <button class="btn" id="btnNext">Siguiente ▶</button>
       </div>
-      <div class="row">
+      <div class="row foco-only">
         <button class="btn" id="btnRandom">🎲 Aleatoria</button>
-        <button class="btn ghost" id="btnOcultar">Ocultar pregunta</button>
+        <button class="btn ghost" id="btnOcultar">Ocultar</button>
+      </div>
+
+      <!-- controles solo para modo enjambre -->
+      <div class="row enjambre-only">
+        <button class="btn" id="btnFloatAll">🫧 Flotar todas</button>
+        <button class="btn ghost" id="btnFloatNone">Quitar todas</button>
       </div>
 
       <div class="sep"></div>
 
-      <label class="field-label" style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;">Preguntas (clic para mostrar)</label>
+      <label style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;">Preguntas <span id="qcount" style="color:var(--naranja)"></span></label>
+      <span class="hint" id="qlistHint" style="margin-top:-6px"></span>
       <div class="qlist" id="qlist"></div>
 
     </div>
     <div class="foot-actions">
       <button class="btn ghost" id="btnResetShown">Reiniciar «ya mostradas»</button>
-      <button class="btn ghost" id="btnHidePanel" title="Ocultar este panel">✕ Panel</button>
+      <button class="btn" id="btnVaciar" style="background:#5a1e1e">🗑 Vaciar todas</button>
+      <button class="btn ghost" id="btnHidePanel" title="Ocultar panel">✕</button>
     </div>
   </aside>
 
@@ -323,131 +396,113 @@
   /* ---------- parámetros / vista ---------- */
   var params = new URLSearchParams(location.search);
   var vista = (params.get('vista') || 'control').toLowerCase();   // control | display
-  document.body.setAttribute('data-vista', vista === 'display' ? 'display' : 'control');
+  var isDisplay = (vista === 'display');
+  document.body.setAttribute('data-vista', isDisplay ? 'display' : 'control');
   if (params.get('bg')) document.body.setAttribute('data-bg', params.get('bg').toLowerCase());
 
   /* ---------- estado ---------- */
-  var LS_CFG = 'ulp_cfg_v1';       // {github, clase, tema}  (se sincroniza al display)
-  var LS_ST  = 'ulp_state_v1';     // {index, visible}
-  var LS_Q   = 'ulp_preguntas_v1'; // array normalizado (para que el display sobreviva a un reload)
-  var LS_SHOWN = 'ulp_shown_v1';   // array de índices ya mostrados
-  var LS_OP  = 'ulp_op_v1';        // {worker, admin, auto}  (solo operador, NO se sincroniza)
-
-  var cfg = load(LS_CFG, { github:'', clase:'', tema:'' });
-  var st  = load(LS_ST,  { index:-1, visible:false });
-  var preguntas = load(LS_Q, []);
-  var shown = new Set(load(LS_SHOWN, []));
-  var op  = load(LS_OP, { worker:'', admin:'', auto:false });
+  // op: config SOLO del operador (no se comparte). worker/admin/auto.
+  var LS_OP = 'ulp_op_v2';
+  var op = load(LS_OP, { worker:'', admin:'', auto:false });
   function persistOp(){ localStorage.setItem(LS_OP, JSON.stringify(op)); }
 
-  // permitir override por URL (útil para fijar clase/tema en la fuente de OBS)
-  if (params.get('clase')) cfg.clase = params.get('clase');
-  if (params.get('tema'))  cfg.tema  = params.get('tema');
-  if (params.get('github'))cfg.github= params.get('github');
-  if (params.get('worker'))op.worker = params.get('worker');
+  // estado COMPARTIDO (via Worker /state): lo que ve el display.
+  //   floatIdx = índices de las preguntas que el operador eligió que floten (modo enjambre)
+  //   qr       = mostrar el QR del formulario en el display
+  var ST_DEF = { clase:'', tema:'', modo:'enjambre', index:-1, visible:false, floatIdx:[], qr:true, ts:0 };
+  var estado = Object.assign({}, ST_DEF);
+  var shown = new Set();       // índices ya mostrados (local del operador)
+  var preguntas = [];          // desde /list
 
-  /* ---------- canal de sincronización entre ventanas ---------- */
-  var bc = ('BroadcastChannel' in window) ? new BroadcastChannel('ulp-preguntas') : null;
-  function broadcast(){
-    var payload = { cfg:cfg, st:st, preguntas:preguntas, shown:[...shown] };
-    if (bc) bc.postMessage(payload);
-  }
-  if (bc) bc.onmessage = function(e){
-    var d = e.data || {};
-    if (d.cfg) cfg = d.cfg;
-    if (d.st) st = d.st;
-    if (d.preguntas) preguntas = d.preguntas;
-    if (d.shown) shown = new Set(d.shown);
-    persist(false);         // guardar sin re-broadcast (evita loop)
-    renderAll();
-  };
-  // respaldo: sincronía por localStorage entre pestañas del mismo navegador
-  window.addEventListener('storage', function(e){
-    if ([LS_CFG,LS_ST,LS_Q,LS_SHOWN].indexOf(e.key) === -1) return;
-    cfg = load(LS_CFG, cfg); st = load(LS_ST, st);
-    preguntas = load(LS_Q, preguntas); shown = new Set(load(LS_SHOWN, [...shown]));
-    renderAll();
-  });
+  // overrides por URL (útil en la fuente de OBS)
+  if (params.get('worker')) op.worker = params.get('worker');
+  if (params.get('clase'))  estado.clase = params.get('clase');
+  if (params.get('tema'))   estado.tema  = params.get('tema');
+  if (params.get('modo'))   estado.modo  = (params.get('modo').toLowerCase()==='foco'?'foco':'enjambre');
+  if (params.get('qr') !== null) estado.qr = !(params.get('qr')==='0'||params.get('qr')==='false');
 
   /* ---------- utilidades ---------- */
   function load(k, def){ try{ var v = JSON.parse(localStorage.getItem(k)); return v==null?def:v; }catch(e){ return def; } }
-  function persist(doBroadcast){
-    localStorage.setItem(LS_CFG, JSON.stringify(cfg));
-    localStorage.setItem(LS_ST, JSON.stringify(st));
-    localStorage.setItem(LS_Q, JSON.stringify(preguntas));
-    localStorage.setItem(LS_SHOWN, JSON.stringify([...shown]));
-    if (doBroadcast !== false) broadcast();
-  }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-
-  // github.com/.../blob/... -> raw.githubusercontent.com/...  (y api de gists simples)
-  function toRaw(url){
-    url = (url||'').trim();
-    var m = url.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/i);
-    if (m) return 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' + m[3];
-    return url;
-  }
+  function apiBase(){ return (op.worker||'').trim().replace(/\/+$/,''); }
   function normalize(data){
     var arr = Array.isArray(data) ? data : (data && (data.preguntas || data.questions)) || [];
     return arr.map(function(q){
       if (typeof q === 'string') return { alumno:'', pregunta:q };
-      if (q && typeof q === 'object'){
-        return {
-          alumno: q.alumno || q.autor || q.nombre || q.author || q.name || '',
-          pregunta: q.pregunta || q.texto || q.text || q.question || ''
-        };
-      }
+      if (q && typeof q === 'object') return {
+        alumno: q.alumno || q.autor || q.nombre || q.author || q.name || '',
+        pregunta: q.pregunta || q.texto || q.text || q.question || ''
+      };
       return { alumno:'', pregunta:String(q) };
     }).filter(function(q){ return q.pregunta && q.pregunta.trim(); });
   }
-
-  /* ---------- carga desde GitHub ---------- */
   function setStatus(msg, kind){
     var el = document.getElementById('status'); if(!el) return;
     el.className = 'status ' + (kind||'info'); el.textContent = msg;
   }
-  function cargar(silencioso){
-    var useWorker = op.worker && op.worker.trim();
-    var p;
-    if (useWorker){
-      var wurl = op.worker.trim().replace(/\/+$/,'') + '/list?t=' + Date.now();
-      if (!silencioso) setStatus('Cargando desde el Worker…', 'info');
-      p = fetch(wurl).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-                     .then(function(d){ if (d && d.ok === false) throw new Error(d.error||'error'); return (d && d.preguntas) || d; });
-    } else {
-      var raw = toRaw(cfg.github);
-      if (!raw){ setStatus('Falta la URL del Worker o de GitHub.', 'err'); return; }
-      if (!silencioso) setStatus('Cargando desde GitHub…', 'info');
-      var url = raw + (raw.indexOf('?')>=0?'&':'?') + 't=' + Date.now(); // cache-buster
-      p = fetch(url).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
-    }
-    p.then(function(data){
-      var list = normalize(data);
-      // NO se resetea la selección ni las "ya mostradas": los alumnos agregan
-      // al final, así que los índices anteriores siguen siendo válidos.
-      preguntas = list;
-      if (st.index >= preguntas.length){ st.index = -1; st.visible = false; }
-      persist();
-      renderAll();
-      setStatus('✓ ' + list.length + ' pregunta(s).' + (op.auto?' (auto)':''), list.length?'ok':'info');
-    }).catch(function(err){
-      setStatus('No se pudo cargar: ' + err.message, 'err');
-    });
+
+  /* ---------- red: /list y /state ---------- */
+  function fetchList(silencioso){
+    var base = apiBase();
+    if (!base){ if(!isDisplay) setStatus('Falta la URL del Worker.', 'err'); return Promise.resolve(); }
+    return fetch(base + '/list?t=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(d){ if (d && d.ok === false) throw new Error(d.error||'error');
+        preguntas = normalize((d && d.preguntas) || d);
+        if (estado.index >= preguntas.length){ estado.index = -1; estado.visible = false; }
+        renderAll();
+        if (!isDisplay && !silencioso) setStatus('✓ ' + preguntas.length + ' pregunta(s).' + (op.auto?' (auto)':''), preguntas.length?'ok':'info');
+      })
+      .catch(function(err){ if(!isDisplay && !silencioso) setStatus('No se pudo cargar: ' + err.message, 'err'); });
   }
 
-  function vaciarGitHub(){
-    if (!op.worker){ setStatus('Necesitás la URL del Worker para vaciar.', 'err'); return; }
+  function fetchState(){
+    var base = apiBase(); if (!base) return Promise.resolve();
+    return fetch(base + '/state?t=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(d){ if (d && d.estado){ estado = Object.assign({}, ST_DEF, d.estado); renderAll(); } })
+      .catch(function(){ /* worker viejo sin /state: ignorar en display */ });
+  }
+
+  // el operador empuja el estado al worker (debounced)
+  var pushTimer = null, pushPending = false;
+  function pushState(){
+    if (isDisplay) return;
+    var base = apiBase();
+    if (!base || !op.admin){ setStatus('Para controlar el display necesitás la URL del Worker y la ADMIN_KEY.', 'err'); return; }
+    pushPending = true;
+    if (pushTimer) return;
+    pushTimer = setTimeout(function(){
+      pushTimer = null;
+      if (!pushPending) return; pushPending = false;
+      fetch(base + '/state', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
+        body: JSON.stringify({ key: op.admin, estado: {
+          clase: estado.clase, tema: estado.tema, modo: estado.modo,
+          index: estado.index, visible: estado.visible,
+          floatIdx: estado.floatIdx || [], qr: estado.qr !== false
+        } })
+      }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
+        .then(function(d){
+          if (!(d && d.ok)){
+            if (d && /404|no encontrada|not found/i.test(d.error||'')) setStatus('El Worker no tiene /state: volvé a subir worker.js (ver README).', 'err');
+            else setStatus('No se pudo actualizar el display: ' + ((d&&d.error)||''), 'err');
+          }
+        }).catch(function(err){ setStatus('Error de red al actualizar display: ' + err.message, 'err'); });
+    }, 300);
+  }
+
+  function vaciar(){
+    var base = apiBase();
+    if (!base){ setStatus('Necesitás la URL del Worker.', 'err'); return; }
     if (!op.admin){ setStatus('Ingresá la clave de operador (ADMIN_KEY).', 'err'); return; }
     setStatus('Vaciando…', 'info');
-    fetch(op.worker.trim().replace(/\/+$/,'') + '/reset', {
-      method:'POST', headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
-      body: JSON.stringify({ key: op.admin })
-    }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
+    fetch(base + '/reset', { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin }, body: JSON.stringify({ key: op.admin }) })
+      .then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
       .then(function(d){
-        if (d && d.ok){
-          preguntas = []; st.index = -1; st.visible = false; shown = new Set();
-          persist(); renderAll(); setStatus('✓ Preguntas vaciadas en GitHub.', 'ok');
-        } else setStatus('No se pudo vaciar: ' + ((d&&d.error)||''), 'err');
+        if (d && d.ok){ preguntas = []; estado.index=-1; estado.visible=false; shown=new Set(); pushState(); renderAll(); setStatus('✓ Preguntas vaciadas.', 'ok'); }
+        else setStatus('No se pudo vaciar: ' + ((d&&d.error)||''), 'err');
       }).catch(function(err){ setStatus('Error: ' + err.message, 'err'); });
   }
 
@@ -455,127 +510,254 @@
   function setAuto(on){
     op.auto = !!on; persistOp();
     if (autoTimer){ clearInterval(autoTimer); autoTimer = null; }
-    if (on) autoTimer = setInterval(function(){ cargar(true); }, 10000);
+    if (on) autoTimer = setInterval(function(){ fetchList(true); }, 10000);
   }
 
-  /* ---------- acciones ---------- */
-  function show(i){
-    if (i<0 || i>=preguntas.length) return;
-    st.index = i; st.visible = true; shown.add(i);
-    persist(); renderAll();
-  }
-  function hide(){ st.visible = false; persist(); renderAll(); }
-  function next(){ if(!preguntas.length) return; var i = st.index; do{ i=(i+1)%preguntas.length; }while(false); show(i); }
-  function prev(){ if(!preguntas.length) return; var i = st.index<=0 ? preguntas.length-1 : st.index-1; show(i); }
+  /* ---------- acciones del operador (modo foco) ---------- */
+  function setModo(m){ estado.modo = (m==='foco'?'foco':'enjambre'); pushState(); renderAll(); }
+  function show(i){ if (i<0 || i>=preguntas.length) return; estado.index=i; estado.visible=true; shown.add(i); pushState(); renderAll(); }
+  function hide(){ estado.visible=false; pushState(); renderAll(); }
+  function next(){ if(!preguntas.length) return; show(((estado.index<0?-1:estado.index)+1)%preguntas.length); }
+  function prev(){ if(!preguntas.length) return; show(estado.index<=0 ? preguntas.length-1 : estado.index-1); }
   function random(){
     if(!preguntas.length) return;
     var pend = preguntas.map(function(_,i){return i;}).filter(function(i){ return !shown.has(i); });
     var pool = pend.length ? pend : preguntas.map(function(_,i){return i;});
     show(pool[Math.floor(Math.random()*pool.length)]);
   }
-  function resetShown(){ shown = new Set(); persist(); renderAll(); }
+  function resetShown(){ shown = new Set(); renderControl(); }
+  // modo enjambre: elegir QUÉ preguntas flotan
+  function toggleFloat(i){
+    var s = new Set(estado.floatIdx || []);
+    if (s.has(i)) s.delete(i); else s.add(i);
+    estado.floatIdx = [...s]; pushState(); renderAll();
+  }
+  function floatAll(){ estado.floatIdx = preguntas.map(function(_,i){return i;}); pushState(); renderAll(); }
+  function floatNone(){ estado.floatIdx = []; pushState(); renderAll(); }
+  function setQR(on){ estado.qr = !!on; pushState(); renderAll(); }
 
-  /* ---------- render DISPLAY ---------- */
-  var lastRendered = -2, lastVisible = null;
-  function renderDisplay(){
-    document.getElementById('dClase').textContent = cfg.clase || 'Nombre de la clase';
-    document.getElementById('dTema').textContent = cfg.tema || 'Tema de hoy';
-    var stage = document.getElementById('stage');
-    var count = document.getElementById('dCount');
-    count.innerHTML = preguntas.length
-      ? ('<b>' + (st.visible && st.index>=0 ? (st.index+1) : shown.size) + '</b> / ' + preguntas.length + ' preguntas')
-      : '';
+  /* ==================================================================
+     ENJAMBRE — burbujas flotando sobre la mitad izquierda (rAF)
+     ================================================================== */
+  var swarmEl = document.getElementById('swarm');
+  var bubbles = [];          // {id, el, x, y, tx, ty, w, h}
+  var rafId = null, lastT = 0;
 
-    var q = (st.visible && st.index>=0) ? preguntas[st.index] : null;
-    // evitar re-animar si no cambió
-    var key = q ? (st.index + '|' + (st.visible?'1':'0')) : ('empty|'+(st.visible?'1':'0'));
-    if (key === lastRendered) return;
-    lastRendered = key;
+  function bubbleId(q, i){ return i + '::' + (q.alumno||'') + '::' + q.pregunta.slice(0,40); }
 
+  // sólo flotan las preguntas que el operador seleccionó (estado.floatIdx)
+  function floatingList(){
+    var idx = (estado.floatIdx || []).filter(function(i){ return i>=0 && i<preguntas.length; });
+    return idx.map(function(i){ return { id: bubbleId(preguntas[i], i), q: preguntas[i] }; });
+  }
+
+  function syncBubbles(){
+    if (!swarmEl) return;
+    var active = (estado.modo !== 'foco');
+    var want = active ? floatingList() : [];
+    if (!want.length){ clearBubbles(); return; }
+
+    var byId = {}; bubbles.forEach(function(b){ byId[b.id] = b; });
+    var wantIds = {}; want.forEach(function(w){ wantIds[w.id]=1; });
+    // sacar las que ya no están seleccionadas
+    bubbles = bubbles.filter(function(b){
+      if (wantIds[b.id]) return true;
+      if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el);
+      return false;
+    });
+    // agregar las nuevas
+    var H = window.innerHeight;
+    want.forEach(function(w){
+      if (byId[w.id]) { updateBubbleContent(byId[w.id], w.q); return; }
+      var el = document.createElement('div');
+      el.className = 'bubble';
+      var author = w.q.alumno ? '<div class="bauthor">'+esc(w.q.alumno)+'</div>' : '<div class="bauthor empty"></div>';
+      el.innerHTML = '<div class="card"><div class="btxt">'+esc(w.q.pregunta)+'</div>'+author+'</div>';
+      swarmEl.appendChild(el);
+      var bw = el.offsetWidth || 260, bh = el.offsetHeight || 120;
+      var x = rand(marginX(), Math.max(marginX(), leftMax() - bw));
+      var y = rand(topMin(), Math.max(topMin(), H - bh - marginY()));
+      var b = { id:w.id, el:el, x:x, y:y, tx:x, ty:y, w:bw, h:bh };
+      newTarget(b);
+      bubbles.push(b);
+      requestAnimationFrame(function(){ el.classList.add('in'); }); // entrada chica -> normal
+    });
+    ensureRaf();
+  }
+  function updateBubbleContent(b, q){
+    var txt = b.el.querySelector('.btxt'); if (txt) txt.innerHTML = esc(q.pregunta);
+    var au = b.el.querySelector('.bauthor');
+    if (au){ if (q.alumno){ au.className='bauthor'; au.textContent=q.alumno; } else { au.className='bauthor empty'; } }
+    // remedir por si cambió el alto
+    b.w = b.el.offsetWidth || b.w; b.h = b.el.offsetHeight || b.h;
+  }
+  function clearBubbles(){
+    bubbles.forEach(function(b){ if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el); });
+    bubbles = [];
+    if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  }
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function marginX(){ return window.innerWidth*0.026; }
+  function marginY(){ return window.innerHeight*0.05; }
+  function topMin(){ return window.innerHeight*0.14; } // deja libre el header
+  function leftMax(){ return window.innerWidth*0.5; }  // mitad izquierda
+  // elegir un nuevo destino aleatorio dentro de la mitad izquierda
+  function newTarget(b){
+    var H = window.innerHeight;
+    b.tx = rand(marginX(), Math.max(marginX(), leftMax() - b.w));
+    b.ty = rand(topMin(), Math.max(topMin(), H - b.h - marginY()));
+  }
+
+  var EASE_K = 0.55;   // más chico = más lento
+  function ensureRaf(){ if (!rafId){ lastT = performance.now(); rafId = requestAnimationFrame(step); } }
+  function step(t){
+    var dt = Math.min(0.05, (t - lastT)/1000); lastT = t;
+    var ease = 1 - Math.exp(-EASE_K * dt);   // suave, independiente del framerate
+    for (var i=0;i<bubbles.length;i++){
+      var b = bubbles[i];
+      b.x += (b.tx - b.x) * ease;
+      b.y += (b.ty - b.y) * ease;
+      // al acercarse al destino, elegir otro -> deriva lenta y continua, sin rebote
+      if (Math.abs(b.tx-b.x) < 24 && Math.abs(b.ty-b.y) < 24) newTarget(b);
+      b.el.style.transform = 'translate3d('+b.x.toFixed(1)+'px,'+b.y.toFixed(1)+'px,0)';
+    }
+    if (bubbles.length) rafId = requestAnimationFrame(step); else rafId = null;
+  }
+  window.addEventListener('resize', function(){
+    var H = window.innerHeight;
+    bubbles.forEach(function(b){
+      b.x = Math.max(marginX(), Math.min(b.x, leftMax()-b.w));
+      b.y = Math.max(topMin(), Math.min(b.y, H - marginY() - b.h));
+      newTarget(b);
+    });
+  });
+
+  /* ==================================================================
+     FOCO — una pregunta destacada
+     ================================================================== */
+  var lastFocusKey = null;
+  function renderFocus(){
+    var stage = document.getElementById('focusstage'); if (!stage) return;
+    var q = (estado.visible && estado.index>=0) ? preguntas[estado.index] : null;
+    var key = q ? (estado.index+'|1') : ('empty|'+(estado.visible?'1':'0'));
+    if (key === lastFocusKey) return; lastFocusKey = key;
     if (q){
       stage.innerHTML =
         '<div class="qcard anim-in">' +
-          '<div class="qhead">' +
-            '<span class="qnum">' + (st.index+1) + '</span>' +
-            '<span class="qlabel">Pregunta de alumno</span>' +
-          '</div>' +
-          '<div class="qtext">' + esc(q.pregunta) + '</div>' +
-          '<div class="qauthor' + (q.alumno?'':' empty') + '">' + esc(q.alumno) + '</div>' +
+          '<div class="qhead"><span class="qnum">'+(estado.index+1)+'</span>' +
+          '<span class="qlabel">Pregunta de alumno</span></div>' +
+          '<div class="qtext">'+esc(q.pregunta)+'</div>' +
+          '<div class="qauthor'+(q.alumno?'':' empty')+'">'+esc(q.alumno)+'</div>' +
         '</div>';
     } else {
       stage.innerHTML =
         '<div class="waiting anim-in">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="#ffb648" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg>' +
-          '<div class="big">' + (preguntas.length ? 'Elegí una pregunta para mostrar' : 'Cargá las preguntas desde GitHub') + '</div>' +
-          '<div class="sub">' + (preguntas.length ? preguntas.length + ' preguntas listas' : 'Panel de control → pegá la URL del JSON') + '</div>' +
+          '<div class="big">'+(preguntas.length ? 'Elegí una pregunta' : 'Esperando preguntas…')+'</div>' +
+          '<div class="sub">'+(preguntas.length ? preguntas.length+' preguntas listas' : 'Cuando lleguen, van a aparecer acá')+'</div>' +
         '</div>';
     }
   }
 
-  /* ---------- render CONTROL ---------- */
+  /* ---------- render ---------- */
+  function renderDisplay(){
+    document.body.setAttribute('data-modo', estado.modo === 'foco' ? 'foco' : 'enjambre');
+    document.body.setAttribute('data-qr', estado.qr === false ? '0' : '1');
+    var dc = document.getElementById('dClase'), dt = document.getElementById('dTema');
+    if (dc) dc.textContent = estado.clase || '';
+    if (dt) dt.textContent = estado.tema || '';
+    if (estado.modo === 'foco'){ clearBubbles(); renderFocus(); }
+    else { lastFocusKey = null; syncBubbles(); }
+  }
+
   function renderControl(){
-    if (vista === 'display') return;
+    if (isDisplay) return;
+    document.body.setAttribute('data-modo', estado.modo === 'foco' ? 'foco' : 'enjambre');
     var w = document.getElementById('inWorker'); if (w && document.activeElement!==w) w.value = op.worker || '';
     var a = document.getElementById('inAdmin');  if (a && document.activeElement!==a) a.value = op.admin || '';
     var au= document.getElementById('inAuto');   if (au) au.checked = !!op.auto;
-    var g = document.getElementById('inGithub'); if (g && document.activeElement!==g) g.value = cfg.github || '';
-    var c = document.getElementById('inClase'); if (c && document.activeElement!==c) c.value = cfg.clase || '';
-    var t = document.getElementById('inTema');  if (t && document.activeElement!==t) t.value = cfg.tema || '';
+    var c = document.getElementById('inClase'); if (c && document.activeElement!==c) c.value = estado.clase || '';
+    var t = document.getElementById('inTema');  if (t && document.activeElement!==t) t.value = estado.tema || '';
+    var qr = document.getElementById('inQR'); if (qr) qr.checked = (estado.qr !== false);
+    Array.prototype.forEach.call(document.querySelectorAll('#modo button'), function(b){
+      b.classList.toggle('on', b.getAttribute('data-modo') === estado.modo);
+    });
+    var isFoco = (estado.modo === 'foco');
+    var floatSet = new Set(estado.floatIdx || []);
+    var cnt = document.getElementById('qcount');
+    if (cnt) cnt.textContent = preguntas.length ? ('('+preguntas.length + (isFoco?'':' · '+floatSet.size+' flotando')+')') : '';
+    var qh = document.getElementById('qlistHint');
+    if (qh) qh.textContent = isFoco ? 'Clic en una pregunta para mostrarla en foco.' : 'Clic para que una pregunta flote (o deje de flotar) en el overlay.';
 
     var list = document.getElementById('qlist');
-    if (!preguntas.length){ list.innerHTML = '<div class="hint">Todavía no hay preguntas cargadas.</div>'; return; }
+    if (!preguntas.length){ list.innerHTML = '<div class="hint">Todavía no hay preguntas. Compartí el formulario (o el QR) con los alumnos.</div>'; return; }
     list.innerHTML = preguntas.map(function(q,i){
-      var cls = 'qitem' + (i===st.index && st.visible ? ' active':'') + (shown.has(i)?' shown':'');
+      var active = isFoco ? (i===estado.index && estado.visible) : floatSet.has(i);
+      var cls = 'qitem' + (active ? (isFoco?' active':' floating') : '') + (shown.has(i)?' shown':'');
       var autor = q.alumno ? '<b>'+esc(q.alumno)+'</b>' : '';
-      return '<button class="'+cls+'" data-i="'+i+'"><span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span></button>';
+      var dot = isFoco ? '' : '<span class="fdot"></span>';
+      return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span></button>';
     }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.qitem'), function(el){
-      el.addEventListener('click', function(){ show(parseInt(el.getAttribute('data-i'),10)); });
+      el.addEventListener('click', function(){
+        var i = parseInt(el.getAttribute('data-i'),10);
+        if (estado.modo === 'foco') show(i); else toggleFloat(i);
+      });
     });
   }
 
-  function renderAll(){ renderDisplay(); renderControl(); }
+  function renderAll(){ if (isDisplay) renderDisplay(); else { renderDisplay(); renderControl(); } }
 
   /* ---------- wiring del panel ---------- */
-  if (vista !== 'display'){
+  if (!isDisplay){
     document.getElementById('btnCargar').addEventListener('click', function(){
-      op.worker = document.getElementById('inWorker').value.trim(); persistOp();
-      cfg.github = document.getElementById('inGithub').value.trim(); persist();
-      cargar();
+      op.worker = document.getElementById('inWorker').value.trim();
+      op.admin  = document.getElementById('inAdmin').value; persistOp();
+      fetchList(); fetchState();
     });
-    document.getElementById('btnRecargar').addEventListener('click', function(){ cargar(); });
+    document.getElementById('btnRecargar').addEventListener('click', function(){ fetchList(); fetchState(); });
     document.getElementById('inWorker').addEventListener('change', function(e){ op.worker = e.target.value.trim(); persistOp(); });
     document.getElementById('inAdmin').addEventListener('input', function(e){ op.admin = e.target.value; persistOp(); });
     document.getElementById('inAuto').addEventListener('change', function(e){ setAuto(e.target.checked); });
-    (function(){
-      var b = document.getElementById('btnVaciar'), armed=false, tmr=null, txt=b.textContent;
-      b.addEventListener('click', function(){
-        if (!armed){ armed=true; b.textContent='⚠ Tocá de nuevo para confirmar'; tmr=setTimeout(function(){ armed=false; b.textContent=txt; },4000); return; }
-        clearTimeout(tmr); armed=false; b.textContent=txt; vaciarGitHub();
-      });
-    })();
-    document.getElementById('inGithub').addEventListener('change', function(e){ cfg.github = e.target.value.trim(); persist(); });
-    document.getElementById('inClase').addEventListener('input', function(e){ cfg.clase = e.target.value; persist(); renderDisplay(); });
-    document.getElementById('inTema').addEventListener('input', function(e){ cfg.tema = e.target.value; persist(); renderDisplay(); });
+    document.getElementById('inClase').addEventListener('input', function(e){ estado.clase = e.target.value; renderDisplay(); pushState(); });
+    document.getElementById('inTema').addEventListener('input', function(e){ estado.tema = e.target.value; renderDisplay(); pushState(); });
+    Array.prototype.forEach.call(document.querySelectorAll('#modo button'), function(b){
+      b.addEventListener('click', function(){ setModo(b.getAttribute('data-modo')); });
+    });
+    document.getElementById('inQR').addEventListener('change', function(e){ setQR(e.target.checked); });
     document.getElementById('btnPrev').addEventListener('click', prev);
     document.getElementById('btnNext').addEventListener('click', next);
     document.getElementById('btnRandom').addEventListener('click', random);
     document.getElementById('btnOcultar').addEventListener('click', hide);
+    document.getElementById('btnFloatAll').addEventListener('click', floatAll);
+    document.getElementById('btnFloatNone').addEventListener('click', floatNone);
     document.getElementById('btnResetShown').addEventListener('click', resetShown);
+    (function(){
+      var b = document.getElementById('btnVaciar'), armed=false, tmr=null, txt=b.textContent;
+      b.addEventListener('click', function(){
+        if (!armed){ armed=true; b.textContent='⚠ Tocá de nuevo'; tmr=setTimeout(function(){ armed=false; b.textContent=txt; },4000); return; }
+        clearTimeout(tmr); armed=false; b.textContent=txt; vaciar();
+      });
+    })();
     document.getElementById('btnHidePanel').addEventListener('click', function(){ document.body.classList.add('panel-hidden'); });
     document.getElementById('togglePanel').addEventListener('click', function(){ document.body.classList.remove('panel-hidden'); });
-    // atajos de teclado
     document.addEventListener('keydown', function(e){
       if (/input|textarea/i.test((e.target.tagName||''))) return;
-      if (e.key === 'ArrowRight') next();
-      else if (e.key === 'ArrowLeft') prev();
-      else if (e.key.toLowerCase() === 'r') random();
+      if (e.key === 'ArrowRight'){ if(estado.modo!=='foco') setModo('foco'); next(); }
+      else if (e.key === 'ArrowLeft'){ if(estado.modo!=='foco') setModo('foco'); prev(); }
+      else if (e.key.toLowerCase() === 'r'){ if(estado.modo!=='foco') setModo('foco'); random(); }
       else if (e.key === 'Escape') hide();
       else if (e.key.toLowerCase() === 'c') document.body.classList.toggle('panel-hidden');
     });
-    // autocargar si ya había una fuente guardada, y arrancar auto-refresh si estaba activo
-    if (op.worker || cfg.github) cargar(preguntas.length > 0);
+    if (op.worker){ fetchList(); fetchState(); }
     if (op.auto) setAuto(true);
+  }
+
+  /* ---------- polling del DISPLAY ---------- */
+  if (isDisplay){
+    fetchList(true); fetchState();
+    setInterval(function(){ fetchList(true); }, 4000);
+    setInterval(function(){ fetchState(); }, 2000);
   }
 
   renderAll();
