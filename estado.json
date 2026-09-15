@@ -1,13 +1,13 @@
 {
   "clase": "",
   "tema": "",
-  "modo": "foco",
-  "index": 0,
+  "modo": "enjambre",
+  "index": 1,
   "visible": true,
   "floatIdx": [
     0,
     1
   ],
   "qr": true,
-  "ts": 1789508109907
+  "ts": 1789508111731
 }
