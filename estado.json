@@ -2,12 +2,12 @@
   "clase": "",
   "tema": "",
   "modo": "foco",
-  "index": -1,
-  "visible": false,
+  "index": 0,
+  "visible": true,
   "floatIdx": [
     0,
     1
   ],
   "qr": true,
-  "ts": 1789508085614
+  "ts": 1789508091222
 }
