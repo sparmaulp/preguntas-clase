@@ -5,8 +5,10 @@
   "index": 2,
   "visible": true,
   "floatIdx": [
-    0
+    0,
+    1,
+    2
   ],
   "qr": true,
-  "ts": 1789509690187
+  "ts": 1789509691372
 }
