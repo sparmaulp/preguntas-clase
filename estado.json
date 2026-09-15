@@ -1,7 +1,7 @@
 {
   "clase": "",
   "tema": "",
-  "modo": "enjambre",
+  "modo": "foco",
   "index": -1,
   "visible": false,
   "floatIdx": [
@@ -9,5 +9,5 @@
     1
   ],
   "qr": true,
-  "ts": 1789508024131
+  "ts": 1789508085614
 }
