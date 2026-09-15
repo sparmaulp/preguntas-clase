@@ -268,6 +268,13 @@
     background: rgba(255,255,255,.04); opacity: .55; transition: opacity .15s, background .15s, border-color .15s;
   }
   .qfocus:hover{ opacity: 1; background: rgba(246,160,26,.16); border-color: var(--naranja); }
+  .qdel{
+    flex: none; align-self: center; cursor: pointer; font-size: 16px; line-height: 1;
+    padding: 5px 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.04); opacity: .55; transition: opacity .15s, background .15s, border-color .15s;
+  }
+  .qdel:hover{ opacity: 1; background: rgba(240,80,80,.18); border-color: #f05050; }
+  .qdel.arm{ opacity: 1; background: rgba(240,80,80,.28); border-color: #f05050; }
   .control .foot-actions{ padding: 12px 20px; border-top: 1px solid rgba(255,255,255,.08); display: flex; gap: 8px; }
   .foco-only{ display: none; }
   body[data-modo="foco"] .foco-only{ display: flex; }
@@ -437,12 +444,13 @@
   function normalize(data){
     var arr = Array.isArray(data) ? data : (data && (data.preguntas || data.questions)) || [];
     return arr.map(function(q){
-      if (typeof q === 'string') return { alumno:'', pregunta:q };
+      if (typeof q === 'string') return { alumno:'', pregunta:q, ts:'' };
       if (q && typeof q === 'object') return {
         alumno: q.alumno || q.autor || q.nombre || q.author || q.name || '',
-        pregunta: q.pregunta || q.texto || q.text || q.question || ''
+        pregunta: q.pregunta || q.texto || q.text || q.question || '',
+        ts: q.ts || q.timestamp || ''
       };
-      return { alumno:'', pregunta:String(q) };
+      return { alumno:'', pregunta:String(q), ts:'' };
     }).filter(function(q){ return q.pregunta && q.pregunta.trim(); });
   }
   function setStatus(msg, kind){
@@ -549,6 +557,34 @@
   function floatAll(){ estado.floatIdx = preguntas.map(function(_,i){return i;}); pushState(); renderAll(); }
   function floatNone(){ estado.floatIdx = []; pushState(); renderAll(); }
   function setQR(on){ estado.qr = !!on; pushState(); renderAll(); }
+  // borrar UNA pregunta (por ts) y remapear floatIdx / index por el corrimiento
+  function borrar(i){
+    var base = apiBase();
+    if (!base){ setStatus('Necesitás la URL del Worker.', 'err'); return; }
+    if (!op.admin){ setStatus('Ingresá la clave de operador (ADMIN_KEY).', 'err'); return; }
+    var q = preguntas[i]; if (!q) return;
+    setStatus('Borrando pregunta…', 'info');
+    fetch(base + '/delete', {
+      method:'POST', headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
+      body: JSON.stringify({ key: op.admin, ts: q.ts || '', pregunta: q.pregunta })
+    }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
+      .then(function(d){
+        if (d && d.ok){
+          // corrimiento: todo lo posterior a i baja un lugar
+          estado.floatIdx = (estado.floatIdx||[]).filter(function(x){ return x!==i; }).map(function(x){ return x>i?x-1:x; });
+          if (estado.index === i){ estado.index=-1; estado.visible=false; }
+          else if (estado.index > i){ estado.index = estado.index-1; }
+          var ns = new Set(); shown.forEach(function(x){ if(x===i) return; ns.add(x>i?x-1:x); }); shown = ns;
+          preguntas.splice(i,1);
+          pushState(); renderAll();
+          setStatus('✓ Pregunta borrada.', 'ok');
+          fetchList(true); // resync con el servidor
+        } else {
+          if (d && /404|no encontrada|not found/i.test(d.error||'')) setStatus('El Worker no tiene /delete: volvé a subir worker.js.', 'err');
+          else setStatus('No se pudo borrar: ' + ((d&&d.error)||''), 'err');
+        }
+      }).catch(function(err){ setStatus('Error: ' + err.message, 'err'); });
+  }
 
   /* ==================================================================
      ENJAMBRE — burbujas flotando sobre la mitad izquierda (rAF)
@@ -768,7 +804,8 @@
       var autor = q.alumno ? '<b>'+esc(q.alumno)+'</b>' : '';
       var dot = isFoco ? '' : '<span class="fdot"></span>';
       var focoBtn = '<span class="qfocus" data-foco="'+i+'" title="Hacer foco en esta pregunta">🎯</span>';
-      return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span>'+focoBtn+'</button>';
+      var delBtn  = '<span class="qdel" data-del="'+i+'" title="Borrar esta pregunta">🗑</span>';
+      return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span>'+focoBtn+delBtn+'</button>';
     }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.qitem'), function(el){
       el.addEventListener('click', function(){
@@ -783,6 +820,20 @@
         var i = parseInt(el.getAttribute('data-foco'),10);
         if (estado.modo !== 'foco') setModo('foco');
         show(i);
+      });
+    });
+    // botón 🗑: borra esa pregunta (doble clic para confirmar)
+    Array.prototype.forEach.call(list.querySelectorAll('.qdel'), function(el){
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var i = parseInt(el.getAttribute('data-del'),10);
+        if (el.getAttribute('data-arm') !== '1'){
+          el.setAttribute('data-arm','1'); el.classList.add('arm'); el.textContent='⚠';
+          el.title = 'Tocá de nuevo para borrar';
+          setTimeout(function(){ el.setAttribute('data-arm','0'); el.classList.remove('arm'); el.textContent='🗑'; el.title='Borrar esta pregunta'; }, 3000);
+          return;
+        }
+        borrar(i);
       });
     });
   }
