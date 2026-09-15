@@ -473,33 +473,38 @@
       .catch(function(){ /* worker viejo sin /state: ignorar en display */ });
   }
 
-  // el operador empuja el estado al worker (debounced)
-  var pushTimer = null, pushPending = false;
+  // el operador empuja el estado al worker (debounce + serializado: nunca dos POST a la vez)
+  var pushTimer = null, pushPending = false, pushInFlight = false;
   function pushState(){
     if (isDisplay) return;
     var base = apiBase();
     if (!base || !op.admin){ setStatus('Para controlar el display necesitás la URL del Worker y la ADMIN_KEY.', 'err'); return; }
     pushPending = true;
-    if (pushTimer) return;
-    pushTimer = setTimeout(function(){
-      pushTimer = null;
-      if (!pushPending) return; pushPending = false;
-      fetch(base + '/state', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
-        body: JSON.stringify({ key: op.admin, estado: {
-          clase: estado.clase, tema: estado.tema, modo: estado.modo,
-          index: estado.index, visible: estado.visible,
-          floatIdx: estado.floatIdx || [], qr: estado.qr !== false
-        } })
-      }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
-        .then(function(d){
-          if (!(d && d.ok)){
-            if (d && /404|no encontrada|not found/i.test(d.error||'')) setStatus('El Worker no tiene /state: volvé a subir worker.js (ver README).', 'err');
-            else setStatus('No se pudo actualizar el display: ' + ((d&&d.error)||''), 'err');
-          }
-        }).catch(function(err){ setStatus('Error de red al actualizar display: ' + err.message, 'err'); });
-    }, 300);
+    if (pushTimer || pushInFlight) return;   // ya hay uno agendado o en curso: se recogerá al terminar
+    pushTimer = setTimeout(doPush, 300);
+  }
+  function doPush(){
+    pushTimer = null;
+    if (pushInFlight) return;                 // se reintentará al terminar el actual
+    if (!pushPending) return;
+    pushPending = false; pushInFlight = true;
+    var base = apiBase();
+    fetch(base + '/state', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
+      body: JSON.stringify({ key: op.admin, estado: {
+        clase: estado.clase, tema: estado.tema, modo: estado.modo,
+        index: estado.index, visible: estado.visible,
+        floatIdx: estado.floatIdx || [], qr: estado.qr !== false
+      } })
+    }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
+      .then(function(d){
+        if (!(d && d.ok)){
+          if (d && /404|no encontrada|not found/i.test(d.error||'')) setStatus('El Worker no tiene /state: volvé a subir worker.js (ver README).', 'err');
+          else setStatus('No se pudo actualizar el display: ' + ((d&&d.error)||''), 'err');
+        }
+      }).catch(function(err){ setStatus('Error de red al actualizar display: ' + err.message, 'err'); })
+      .then(function(){ pushInFlight = false; if (pushPending && !pushTimer) pushTimer = setTimeout(doPush, 120); });
   }
 
   function vaciar(){
@@ -575,6 +580,7 @@
       return false;
     });
     // agregar las nuevas
+    computeQRZone();
     var H = window.innerHeight;
     want.forEach(function(w){
       if (byId[w.id]) { updateBubbleContent(byId[w.id], w.q); return; }
@@ -609,19 +615,36 @@
   function marginY(){ return window.innerHeight*0.05; }
   function topMin(){ return window.innerHeight*0.15; } // deja libre el header (arriba)
   function xMax(bw){ return window.innerWidth - marginX() - bw; } // ahora llega hasta la derecha
-  // zona reservada abajo-derecha donde está el QR (para no taparlo)
-  function inQRZone(x,y,w,h){
-    if (estado.qr === false) return false;
-    var zx = window.innerWidth*0.62, zy = window.innerHeight*0.58;
-    return (x + w) > zx && (y + h) > zy;
+
+  // zona reservada = rectángulo REAL del QR (con margen). null si el QR está apagado.
+  var qrZone = null;
+  function computeQRZone(){
+    if (estado.qr === false){ qrZone = null; return; }
+    var el = document.getElementById('qrbox');
+    if (!el){ qrZone = null; return; }
+    var r = el.getBoundingClientRect();
+    if (!r || r.width === 0 || r.height === 0){ qrZone = null; return; }
+    var m = 20; // margen alrededor del QR
+    qrZone = { x: r.left - m, y: r.top - m, r: r.right + m, b: r.bottom + m };
+  }
+  function overlapsZone(x,y,w,h){
+    var z = qrZone; if (!z) return false;
+    return x < z.r && (x+w) > z.x && y < z.b && (y+h) > z.y;
+  }
+  // saca una burbuja de la zona del QR por el lado más cercano (izquierda o arriba)
+  function pushOutOfZone(b){
+    var z = qrZone; if (!z || !overlapsZone(b.x,b.y,b.w,b.h)) return;
+    var left = (b.x + b.w) - z.x;  // cuánto mover a la izquierda para salir
+    var up   = (b.y + b.h) - z.y;  // cuánto mover hacia arriba para salir
+    if (left <= up) b.x -= left; else b.y -= up;
   }
   // una posición aleatoria válida dentro de todo el lienzo (evitando header y QR)
   function randomPos(b){
     var H = window.innerHeight;
-    for (var k=0;k<10;k++){
+    for (var k=0;k<12;k++){
       var x = rand(marginX(), Math.max(marginX(), xMax(b.w)));
       var y = rand(topMin(), Math.max(topMin(), H - b.h - marginY()));
-      if (!inQRZone(x, y, b.w, b.h)) return { x:x, y:y };
+      if (!overlapsZone(x, y, b.w, b.h)) return { x:x, y:y };
     }
     return { x: marginX(), y: topMin() }; // fallback: arriba a la izquierda
   }
@@ -634,12 +657,15 @@
     var dt = Math.min(0.05, (t - lastT)/1000); lastT = t;
     var ease = 1 - Math.exp(-EASE_K * dt);   // suave, independiente del framerate
     var i, j, b, H = window.innerHeight;
+    computeQRZone();   // rectángulo actual del QR (o null si está apagado)
     // 1) deriva lenta hacia el destino (sin rebote)
     for (i=0;i<bubbles.length;i++){
       b = bubbles[i];
       b.x += (b.tx - b.x) * ease;
       b.y += (b.ty - b.y) * ease;
-      if (Math.abs(b.tx-b.x) < 24 && Math.abs(b.ty-b.y) < 24) newTarget(b);
+      // si el destino cayó dentro de la zona del QR (p.ej. recién se prendió), reelegir
+      if (overlapsZone(b.tx, b.ty, b.w, b.h)) newTarget(b);
+      else if (Math.abs(b.tx-b.x) < 24 && Math.abs(b.ty-b.y) < 24) newTarget(b);
     }
     // 2) separación: empujar las que se solapan para que no se amontonen
     for (i=0;i<bubbles.length;i++){
@@ -656,9 +682,12 @@
         }
       }
     }
-    // 3) clamp a la región y pintar
+    // 3) clamp a la región, sacar del QR y pintar
     for (i=0;i<bubbles.length;i++){
       b = bubbles[i];
+      b.x = Math.max(marginX(), Math.min(b.x, xMax(b.w)));
+      b.y = Math.max(topMin(), Math.min(b.y, H - marginY() - b.h));
+      pushOutOfZone(b);   // ninguna burbuja se dibuja sobre el QR
       b.x = Math.max(marginX(), Math.min(b.x, xMax(b.w)));
       b.y = Math.max(topMin(), Math.min(b.y, H - marginY() - b.h));
       b.el.style.transform = 'translate3d('+b.x.toFixed(1)+'px,'+b.y.toFixed(1)+'px,0)';
