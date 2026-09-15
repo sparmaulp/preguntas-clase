@@ -2,12 +2,11 @@
   "clase": "Int. Programación",
   "tema": "Trabajo Practico 04",
   "modo": "foco",
-  "index": 1,
+  "index": 0,
   "visible": true,
   "floatIdx": [
-    0,
-    1
+    0
   ],
   "qr": false,
-  "ts": 1789510469246
+  "ts": 1789510473381
 }
