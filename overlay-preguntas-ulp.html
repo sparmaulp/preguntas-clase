@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Overlay ULP — Preguntas de alumnos</title>
+<meta name="viewport" content="width=1920, height=1080">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* =====================================================================
+     Overlay ULP — Preguntas de alumnos (para OBS)
+     - Sin marca ni colores de Gestioo. Identidad: logo ULP (blanco+naranja
+       #f6a01a) sobre fondo oscuro.
+     - Dos vistas sincronizadas (BroadcastChannel + localStorage):
+         ?vista=control  -> panel operador (cargar/editar/elegir pregunta)
+         ?vista=display   -> overlay limpio para OBS (window capture)
+       (sin parámetro = control)
+     - Preguntas: se cargan desde una URL de GitHub (JSON). Ver panel.
+     ===================================================================== */
+
+  :root{
+    --naranja: #f6a01a;
+    --naranja-2: #ffb648;
+    --bg-1: #0c1626;
+    --bg-2: #0a1120;
+    --ink: #ffffff;
+    --ink-soft: #aebacb;
+    --card: rgba(255,255,255,.06);
+    --card-border: rgba(255,255,255,.12);
+    --ease: cubic-bezier(.22,.9,.24,1);
+  }
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+  html, body{ width: 100%; height: 100%; }
+  body{
+    font-family: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #05080f;
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  /* ---------------- DISPLAY (lo que ve OBS) ---------------- */
+  .display{
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 4.2vh 5vw;
+    background:
+      radial-gradient(1200px 700px at 82% -10%, rgba(246,160,26,.16), transparent 60%),
+      radial-gradient(900px 700px at 8% 110%, rgba(246,160,26,.08), transparent 55%),
+      linear-gradient(160deg, var(--bg-1), var(--bg-2));
+    overflow: hidden;
+  }
+  body[data-bg="transparente"] .display{ background: transparent; }
+  body[data-bg="transparente"] .fx{ display: none; }
+
+  /* textura/acento animado sutil */
+  .fx{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .fx::before, .fx::after{
+    content: ""; position: absolute; border-radius: 50%;
+    background: radial-gradient(circle, rgba(246,160,26,.22), transparent 70%);
+    filter: blur(30px);
+  }
+  .fx::before{ width: 520px; height: 520px; top: -160px; right: -120px; animation: float1 14s var(--ease) infinite; }
+  .fx::after{ width: 420px; height: 420px; bottom: -160px; left: -100px; animation: float2 18s var(--ease) infinite; }
+  @keyframes float1{ 50%{ transform: translate(-40px, 60px) scale(1.1); } }
+  @keyframes float2{ 50%{ transform: translate(50px, -40px) scale(1.15); } }
+
+  /* encabezado: logo ULP + clase + tema */
+  .top{
+    position: relative; z-index: 2;
+    display: flex; align-items: center; gap: 2.4vw;
+  }
+  .brand{ display: flex; align-items: center; gap: 22px; flex: none; }
+  .brand img{ height: 9vh; min-height: 66px; width: auto; display: block; }
+  .brand .divider{ width: 2px; height: 8vh; min-height: 60px; background: linear-gradient(var(--naranja), transparent); border-radius: 2px; opacity: .8; }
+  .meta{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .meta .clase{
+    font-size: clamp(1.7rem, 2.3vw, 2.6rem);
+    font-weight: 800; line-height: 1.05; letter-spacing: -.01em;
+    color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,.4);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .meta .tema{
+    display: inline-flex; align-items: center; gap: 12px;
+    font-size: clamp(1.05rem, 1.35vw, 1.55rem); font-weight: 600; color: var(--naranja-2);
+  }
+  .meta .tema::before{
+    content: ""; width: 12px; height: 12px; border-radius: 3px;
+    background: var(--naranja); box-shadow: 0 0 16px var(--naranja);
+  }
+  .live{
+    margin-left: auto; flex: none;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 10px 20px; border-radius: 999px;
+    background: rgba(246,160,26,.14); border: 1px solid rgba(246,160,26,.4);
+    font-size: clamp(.95rem, 1.1vw, 1.25rem); font-weight: 700; color: var(--naranja-2);
+    text-transform: uppercase; letter-spacing: .12em;
+  }
+  .live .dot{ width: 12px; height: 12px; border-radius: 50%; background: var(--naranja); box-shadow: 0 0 0 0 rgba(246,160,26,.7); animation: pulse 1.8s infinite; }
+  @keyframes pulse{ 70%{ box-shadow: 0 0 0 14px rgba(246,160,26,0); } 100%{ box-shadow: 0 0 0 0 rgba(246,160,26,0); } }
+
+  /* zona central: tarjeta de la pregunta */
+  .stage{
+    position: relative; z-index: 2;
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+    min-height: 0; padding: 3vh 0 1vh;
+  }
+  .qcard{
+    width: 100%; max-width: 1500px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-left: 10px solid var(--naranja);
+    border-radius: 28px;
+    padding: 5vh 5vw;
+    box-shadow: 0 40px 90px rgba(0,0,0,.45);
+    backdrop-filter: blur(8px);
+  }
+  .qcard .qhead{ display: flex; align-items: center; gap: 18px; margin-bottom: 3vh; }
+  .qcard .qnum{
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 62px; height: 62px; padding: 0 16px; border-radius: 16px;
+    background: linear-gradient(160deg, var(--naranja), #e08800);
+    color: #1a1204; font-weight: 800; font-size: 1.6rem;
+    box-shadow: 0 12px 26px rgba(246,160,26,.4);
+  }
+  .qcard .qlabel{ font-size: clamp(1rem, 1.15vw, 1.3rem); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+  .qcard .qtext{
+    font-size: clamp(2rem, 3.4vw, 4.2rem);
+    font-weight: 700; line-height: 1.18; color: #fff;
+    letter-spacing: -.01em;
+  }
+  .qcard .qauthor{
+    margin-top: 3.4vh; display: inline-flex; align-items: center; gap: 14px;
+    font-size: clamp(1.15rem, 1.5vw, 1.9rem); font-weight: 600; color: var(--naranja-2);
+  }
+  .qcard .qauthor::before{
+    content: ""; width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: rgba(246,160,26,.18) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23ffb648" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>') center/22px no-repeat;
+    border: 1px solid rgba(246,160,26,.4);
+  }
+  .qcard .qauthor.empty{ display: none; }
+
+  /* estado en espera (sin pregunta visible) */
+  .waiting{
+    text-align: center; color: var(--ink-soft);
+  }
+  .waiting .big{ font-size: clamp(2rem, 3vw, 3.4rem); font-weight: 800; color: #fff; margin-bottom: 14px; }
+  .waiting .sub{ font-size: clamp(1.1rem, 1.4vw, 1.6rem); font-weight: 500; }
+  .waiting svg{ width: clamp(70px, 7vw, 120px); height: auto; margin-bottom: 3vh; opacity: .9; }
+
+  /* animación de entrada de la pregunta */
+  .anim-in{ animation: qin .55s var(--ease) both; }
+  @keyframes qin{ from{ opacity: 0; transform: translateY(40px) scale(.97); } to{ opacity: 1; transform: none; } }
+
+  /* pie */
+  .foot{
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    color: var(--ink-soft); font-size: clamp(.9rem, 1vw, 1.15rem); font-weight: 500;
+  }
+  .foot .count{ display: inline-flex; align-items: center; gap: 10px; }
+  .foot .count b{ color: #fff; }
+
+  /* ---------------- PANEL DE CONTROL ---------------- */
+  body[data-vista="display"] .control{ display: none; }
+  .control{
+    position: fixed; top: 0; right: 0; z-index: 50;
+    width: 440px; max-width: 42vw; height: 100%;
+    background: #0a1322; border-left: 1px solid rgba(255,255,255,.1);
+    box-shadow: -20px 0 60px rgba(0,0,0,.5);
+    display: flex; flex-direction: column;
+    font-size: 14px;
+  }
+  .control h2{ font-size: 15px; font-weight: 800; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px; }
+  .control h2 .tag{ font-size: 10px; font-weight: 700; color: var(--naranja); border: 1px solid rgba(246,160,26,.5); padding: 2px 8px; border-radius: 999px; letter-spacing: .1em; }
+  .control .body{ padding: 16px 20px; overflow-y: auto; flex: 1 1 auto; display: flex; flex-direction: column; gap: 16px; }
+  .field{ display: flex; flex-direction: column; gap: 6px; }
+  .field label{ font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  .field input{
+    width: 100%; padding: 11px 13px; border-radius: 10px;
+    background: #0f1c30; border: 1px solid rgba(255,255,255,.14); color: #fff;
+    font-family: inherit; font-size: 14px; font-weight: 500;
+  }
+  .field input:focus{ outline: none; border-color: var(--naranja); box-shadow: 0 0 0 3px rgba(246,160,26,.18); }
+  .row{ display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn{
+    flex: 1 1 auto; padding: 11px 14px; border-radius: 10px; border: none; cursor: pointer;
+    font-family: inherit; font-size: 13.5px; font-weight: 700; color: #fff;
+    background: #1c2b44; transition: transform .1s, background .15s;
+  }
+  .btn:hover{ transform: translateY(-1px); background: #24365a; }
+  .btn.primary{ background: linear-gradient(160deg, var(--naranja), #e08800); color: #1a1204; }
+  .btn.primary:hover{ background: linear-gradient(160deg, var(--naranja-2), var(--naranja)); }
+  .btn.ghost{ background: transparent; border: 1px solid rgba(255,255,255,.18); }
+  .hint{ font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .hint code{ background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 5px; font-size: 11.5px; }
+  .status{ font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 8px; }
+  .status.ok{ background: rgba(60,200,120,.14); color: #7ee6a8; }
+  .status.err{ background: rgba(240,80,80,.14); color: #ff9d9d; }
+  .status.info{ background: rgba(246,160,26,.14); color: var(--naranja-2); }
+  .sep{ height: 1px; background: rgba(255,255,255,.08); margin: 2px 0; }
+  .qlist{ display: flex; flex-direction: column; gap: 8px; }
+  .qitem{
+    text-align: left; padding: 11px 13px; border-radius: 10px; cursor: pointer;
+    background: #0f1c30; border: 1px solid rgba(255,255,255,.1); color: #dfe7f2;
+    font-family: inherit; font-size: 13.5px; line-height: 1.4; display: flex; gap: 10px;
+    transition: border-color .15s, background .15s;
+  }
+  .qitem:hover{ border-color: var(--naranja); background: #14243c; }
+  .qitem.active{ border-color: var(--naranja); background: rgba(246,160,26,.14); }
+  .qitem.shown{ opacity: .55; }
+  .qitem .n{ flex: none; font-weight: 800; color: var(--naranja); }
+  .qitem .txt b{ display: block; color: #fff; font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .control .foot-actions{ padding: 12px 20px; border-top: 1px solid rgba(255,255,255,.08); display: flex; gap: 8px; }
+
+  /* botón flotante para abrir/cerrar el panel (solo vista control) */
+  .toggle-panel{
+    position: fixed; top: 16px; right: 16px; z-index: 60;
+    width: 46px; height: 46px; border-radius: 12px; border: none; cursor: pointer;
+    background: rgba(10,19,34,.9); color: var(--naranja); border: 1px solid rgba(246,160,26,.4);
+    font-size: 20px; display: none; align-items: center; justify-content: center;
+  }
+  body[data-vista="display"] .toggle-panel{ display: none !important; }
+  body.panel-hidden .control{ display: none; }
+  body.panel-hidden .toggle-panel{ display: flex; }
+</style>
+</head>
+<body>
+
+  <!-- ===================== DISPLAY (OBS) ===================== -->
+  <div class="display">
+    <div class="fx"></div>
+
+    <header class="top">
+      <div class="brand">
+        <img src="ulp_header.svg" alt="Universidad de La Punta">
+        <div class="divider"></div>
+      </div>
+      <div class="meta">
+        <span class="clase" id="dClase">Nombre de la clase</span>
+        <span class="tema" id="dTema">Tema de hoy</span>
+      </div>
+      <span class="live"><span class="dot"></span> En vivo</span>
+    </header>
+
+    <main class="stage" id="stage">
+      <!-- se rellena por JS: .qcard o .waiting -->
+    </main>
+
+    <footer class="foot">
+      <span class="count" id="dCount"></span>
+      <span>Preguntas de los alumnos · #ULP</span>
+    </footer>
+  </div>
+
+  <!-- ===================== PANEL DE CONTROL ===================== -->
+  <button class="toggle-panel" id="togglePanel" title="Mostrar panel">⚙</button>
+
+  <aside class="control" id="control">
+    <h2>Panel de control <span class="tag">OPERADOR</span></h2>
+    <div class="body">
+
+      <div class="field">
+        <label>URL del Worker (API) — recomendado</label>
+        <input id="inWorker" type="text" placeholder="https://ulp-preguntas.tu-usuario.workers.dev" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>URL de GitHub raw/blob (respaldo si no usás Worker)</label>
+        <input id="inGithub" type="text" placeholder="https://github.com/usuario/repo/blob/main/preguntas.json" spellcheck="false">
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnCargar">Cargar preguntas</button>
+        <button class="btn ghost" id="btnRecargar" title="Volver a leer">↻</button>
+      </div>
+      <label class="autolbl" style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);cursor:pointer;">
+        <input id="inAuto" type="checkbox" style="width:auto"> Auto-actualizar cada 10 s (para ver preguntas nuevas)
+      </label>
+      <div id="status" class="status info">Cargá desde el Worker (siempre fresco) o desde la URL de GitHub.</div>
+
+      <div class="sep"></div>
+      <div class="field">
+        <label>Clave de operador (ADMIN_KEY, para vaciar)</label>
+        <input id="inAdmin" type="password" placeholder="clave definida en el Worker" autocomplete="off">
+      </div>
+      <button class="btn" id="btnVaciar" style="background:#5a1e1e">🗑 Vaciar todas las preguntas (GitHub)</button>
+
+      <div class="sep"></div>
+
+      <div class="field">
+        <label>Nombre de la clase</label>
+        <input id="inClase" type="text" placeholder="Ej: Programación I — Comisión A">
+      </div>
+      <div class="field">
+        <label>Tema de hoy</label>
+        <input id="inTema" type="text" placeholder="Ej: Estructuras de control">
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="row">
+        <button class="btn" id="btnPrev">◀ Anterior</button>
+        <button class="btn" id="btnNext">Siguiente ▶</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnRandom">🎲 Aleatoria</button>
+        <button class="btn ghost" id="btnOcultar">Ocultar pregunta</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <label class="field-label" style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;">Preguntas (clic para mostrar)</label>
+      <div class="qlist" id="qlist"></div>
+
+    </div>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnResetShown">Reiniciar «ya mostradas»</button>
+      <button class="btn ghost" id="btnHidePanel" title="Ocultar este panel">✕ Panel</button>
+    </div>
+  </aside>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- parámetros / vista ---------- */
+  var params = new URLSearchParams(location.search);
+  var vista = (params.get('vista') || 'control').toLowerCase();   // control | display
+  document.body.setAttribute('data-vista', vista === 'display' ? 'display' : 'control');
+  if (params.get('bg')) document.body.setAttribute('data-bg', params.get('bg').toLowerCase());
+
+  /* ---------- estado ---------- */
+  var LS_CFG = 'ulp_cfg_v1';       // {github, clase, tema}  (se sincroniza al display)
+  var LS_ST  = 'ulp_state_v1';     // {index, visible}
+  var LS_Q   = 'ulp_preguntas_v1'; // array normalizado (para que el display sobreviva a un reload)
+  var LS_SHOWN = 'ulp_shown_v1';   // array de índices ya mostrados
+  var LS_OP  = 'ulp_op_v1';        // {worker, admin, auto}  (solo operador, NO se sincroniza)
+
+  var cfg = load(LS_CFG, { github:'', clase:'', tema:'' });
+  var st  = load(LS_ST,  { index:-1, visible:false });
+  var preguntas = load(LS_Q, []);
+  var shown = new Set(load(LS_SHOWN, []));
+  var op  = load(LS_OP, { worker:'', admin:'', auto:false });
+  function persistOp(){ localStorage.setItem(LS_OP, JSON.stringify(op)); }
+
+  // permitir override por URL (útil para fijar clase/tema en la fuente de OBS)
+  if (params.get('clase')) cfg.clase = params.get('clase');
+  if (params.get('tema'))  cfg.tema  = params.get('tema');
+  if (params.get('github'))cfg.github= params.get('github');
+  if (params.get('worker'))op.worker = params.get('worker');
+
+  /* ---------- canal de sincronización entre ventanas ---------- */
+  var bc = ('BroadcastChannel' in window) ? new BroadcastChannel('ulp-preguntas') : null;
+  function broadcast(){
+    var payload = { cfg:cfg, st:st, preguntas:preguntas, shown:[...shown] };
+    if (bc) bc.postMessage(payload);
+  }
+  if (bc) bc.onmessage = function(e){
+    var d = e.data || {};
+    if (d.cfg) cfg = d.cfg;
+    if (d.st) st = d.st;
+    if (d.preguntas) preguntas = d.preguntas;
+    if (d.shown) shown = new Set(d.shown);
+    persist(false);         // guardar sin re-broadcast (evita loop)
+    renderAll();
+  };
+  // respaldo: sincronía por localStorage entre pestañas del mismo navegador
+  window.addEventListener('storage', function(e){
+    if ([LS_CFG,LS_ST,LS_Q,LS_SHOWN].indexOf(e.key) === -1) return;
+    cfg = load(LS_CFG, cfg); st = load(LS_ST, st);
+    preguntas = load(LS_Q, preguntas); shown = new Set(load(LS_SHOWN, [...shown]));
+    renderAll();
+  });
+
+  /* ---------- utilidades ---------- */
+  function load(k, def){ try{ var v = JSON.parse(localStorage.getItem(k)); return v==null?def:v; }catch(e){ return def; } }
+  function persist(doBroadcast){
+    localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+    localStorage.setItem(LS_ST, JSON.stringify(st));
+    localStorage.setItem(LS_Q, JSON.stringify(preguntas));
+    localStorage.setItem(LS_SHOWN, JSON.stringify([...shown]));
+    if (doBroadcast !== false) broadcast();
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  // github.com/.../blob/... -> raw.githubusercontent.com/...  (y api de gists simples)
+  function toRaw(url){
+    url = (url||'').trim();
+    var m = url.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/i);
+    if (m) return 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' + m[3];
+    return url;
+  }
+  function normalize(data){
+    var arr = Array.isArray(data) ? data : (data && (data.preguntas || data.questions)) || [];
+    return arr.map(function(q){
+      if (typeof q === 'string') return { alumno:'', pregunta:q };
+      if (q && typeof q === 'object'){
+        return {
+          alumno: q.alumno || q.autor || q.nombre || q.author || q.name || '',
+          pregunta: q.pregunta || q.texto || q.text || q.question || ''
+        };
+      }
+      return { alumno:'', pregunta:String(q) };
+    }).filter(function(q){ return q.pregunta && q.pregunta.trim(); });
+  }
+
+  /* ---------- carga desde GitHub ---------- */
+  function setStatus(msg, kind){
+    var el = document.getElementById('status'); if(!el) return;
+    el.className = 'status ' + (kind||'info'); el.textContent = msg;
+  }
+  function cargar(silencioso){
+    var useWorker = op.worker && op.worker.trim();
+    var p;
+    if (useWorker){
+      var wurl = op.worker.trim().replace(/\/+$/,'') + '/list?t=' + Date.now();
+      if (!silencioso) setStatus('Cargando desde el Worker…', 'info');
+      p = fetch(wurl).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+                     .then(function(d){ if (d && d.ok === false) throw new Error(d.error||'error'); return (d && d.preguntas) || d; });
+    } else {
+      var raw = toRaw(cfg.github);
+      if (!raw){ setStatus('Falta la URL del Worker o de GitHub.', 'err'); return; }
+      if (!silencioso) setStatus('Cargando desde GitHub…', 'info');
+      var url = raw + (raw.indexOf('?')>=0?'&':'?') + 't=' + Date.now(); // cache-buster
+      p = fetch(url).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+    }
+    p.then(function(data){
+      var list = normalize(data);
+      // NO se resetea la selección ni las "ya mostradas": los alumnos agregan
+      // al final, así que los índices anteriores siguen siendo válidos.
+      preguntas = list;
+      if (st.index >= preguntas.length){ st.index = -1; st.visible = false; }
+      persist();
+      renderAll();
+      setStatus('✓ ' + list.length + ' pregunta(s).' + (op.auto?' (auto)':''), list.length?'ok':'info');
+    }).catch(function(err){
+      setStatus('No se pudo cargar: ' + err.message, 'err');
+    });
+  }
+
+  function vaciarGitHub(){
+    if (!op.worker){ setStatus('Necesitás la URL del Worker para vaciar.', 'err'); return; }
+    if (!op.admin){ setStatus('Ingresá la clave de operador (ADMIN_KEY).', 'err'); return; }
+    setStatus('Vaciando…', 'info');
+    fetch(op.worker.trim().replace(/\/+$/,'') + '/reset', {
+      method:'POST', headers:{ 'Content-Type':'application/json', 'X-Admin-Key': op.admin },
+      body: JSON.stringify({ key: op.admin })
+    }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'respuesta inválida'}; }); })
+      .then(function(d){
+        if (d && d.ok){
+          preguntas = []; st.index = -1; st.visible = false; shown = new Set();
+          persist(); renderAll(); setStatus('✓ Preguntas vaciadas en GitHub.', 'ok');
+        } else setStatus('No se pudo vaciar: ' + ((d&&d.error)||''), 'err');
+      }).catch(function(err){ setStatus('Error: ' + err.message, 'err'); });
+  }
+
+  var autoTimer = null;
+  function setAuto(on){
+    op.auto = !!on; persistOp();
+    if (autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+    if (on) autoTimer = setInterval(function(){ cargar(true); }, 10000);
+  }
+
+  /* ---------- acciones ---------- */
+  function show(i){
+    if (i<0 || i>=preguntas.length) return;
+    st.index = i; st.visible = true; shown.add(i);
+    persist(); renderAll();
+  }
+  function hide(){ st.visible = false; persist(); renderAll(); }
+  function next(){ if(!preguntas.length) return; var i = st.index; do{ i=(i+1)%preguntas.length; }while(false); show(i); }
+  function prev(){ if(!preguntas.length) return; var i = st.index<=0 ? preguntas.length-1 : st.index-1; show(i); }
+  function random(){
+    if(!preguntas.length) return;
+    var pend = preguntas.map(function(_,i){return i;}).filter(function(i){ return !shown.has(i); });
+    var pool = pend.length ? pend : preguntas.map(function(_,i){return i;});
+    show(pool[Math.floor(Math.random()*pool.length)]);
+  }
+  function resetShown(){ shown = new Set(); persist(); renderAll(); }
+
+  /* ---------- render DISPLAY ---------- */
+  var lastRendered = -2, lastVisible = null;
+  function renderDisplay(){
+    document.getElementById('dClase').textContent = cfg.clase || 'Nombre de la clase';
+    document.getElementById('dTema').textContent = cfg.tema || 'Tema de hoy';
+    var stage = document.getElementById('stage');
+    var count = document.getElementById('dCount');
+    count.innerHTML = preguntas.length
+      ? ('<b>' + (st.visible && st.index>=0 ? (st.index+1) : shown.size) + '</b> / ' + preguntas.length + ' preguntas')
+      : '';
+
+    var q = (st.visible && st.index>=0) ? preguntas[st.index] : null;
+    // evitar re-animar si no cambió
+    var key = q ? (st.index + '|' + (st.visible?'1':'0')) : ('empty|'+(st.visible?'1':'0'));
+    if (key === lastRendered) return;
+    lastRendered = key;
+
+    if (q){
+      stage.innerHTML =
+        '<div class="qcard anim-in">' +
+          '<div class="qhead">' +
+            '<span class="qnum">' + (st.index+1) + '</span>' +
+            '<span class="qlabel">Pregunta de alumno</span>' +
+          '</div>' +
+          '<div class="qtext">' + esc(q.pregunta) + '</div>' +
+          '<div class="qauthor' + (q.alumno?'':' empty') + '">' + esc(q.alumno) + '</div>' +
+        '</div>';
+    } else {
+      stage.innerHTML =
+        '<div class="waiting anim-in">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="#ffb648" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg>' +
+          '<div class="big">' + (preguntas.length ? 'Elegí una pregunta para mostrar' : 'Cargá las preguntas desde GitHub') + '</div>' +
+          '<div class="sub">' + (preguntas.length ? preguntas.length + ' preguntas listas' : 'Panel de control → pegá la URL del JSON') + '</div>' +
+        '</div>';
+    }
+  }
+
+  /* ---------- render CONTROL ---------- */
+  function renderControl(){
+    if (vista === 'display') return;
+    var w = document.getElementById('inWorker'); if (w && document.activeElement!==w) w.value = op.worker || '';
+    var a = document.getElementById('inAdmin');  if (a && document.activeElement!==a) a.value = op.admin || '';
+    var au= document.getElementById('inAuto');   if (au) au.checked = !!op.auto;
+    var g = document.getElementById('inGithub'); if (g && document.activeElement!==g) g.value = cfg.github || '';
+    var c = document.getElementById('inClase'); if (c && document.activeElement!==c) c.value = cfg.clase || '';
+    var t = document.getElementById('inTema');  if (t && document.activeElement!==t) t.value = cfg.tema || '';
+
+    var list = document.getElementById('qlist');
+    if (!preguntas.length){ list.innerHTML = '<div class="hint">Todavía no hay preguntas cargadas.</div>'; return; }
+    list.innerHTML = preguntas.map(function(q,i){
+      var cls = 'qitem' + (i===st.index && st.visible ? ' active':'') + (shown.has(i)?' shown':'');
+      var autor = q.alumno ? '<b>'+esc(q.alumno)+'</b>' : '';
+      return '<button class="'+cls+'" data-i="'+i+'"><span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(list.querySelectorAll('.qitem'), function(el){
+      el.addEventListener('click', function(){ show(parseInt(el.getAttribute('data-i'),10)); });
+    });
+  }
+
+  function renderAll(){ renderDisplay(); renderControl(); }
+
+  /* ---------- wiring del panel ---------- */
+  if (vista !== 'display'){
+    document.getElementById('btnCargar').addEventListener('click', function(){
+      op.worker = document.getElementById('inWorker').value.trim(); persistOp();
+      cfg.github = document.getElementById('inGithub').value.trim(); persist();
+      cargar();
+    });
+    document.getElementById('btnRecargar').addEventListener('click', function(){ cargar(); });
+    document.getElementById('inWorker').addEventListener('change', function(e){ op.worker = e.target.value.trim(); persistOp(); });
+    document.getElementById('inAdmin').addEventListener('input', function(e){ op.admin = e.target.value; persistOp(); });
+    document.getElementById('inAuto').addEventListener('change', function(e){ setAuto(e.target.checked); });
+    (function(){
+      var b = document.getElementById('btnVaciar'), armed=false, tmr=null, txt=b.textContent;
+      b.addEventListener('click', function(){
+        if (!armed){ armed=true; b.textContent='⚠ Tocá de nuevo para confirmar'; tmr=setTimeout(function(){ armed=false; b.textContent=txt; },4000); return; }
+        clearTimeout(tmr); armed=false; b.textContent=txt; vaciarGitHub();
+      });
+    })();
+    document.getElementById('inGithub').addEventListener('change', function(e){ cfg.github = e.target.value.trim(); persist(); });
+    document.getElementById('inClase').addEventListener('input', function(e){ cfg.clase = e.target.value; persist(); renderDisplay(); });
+    document.getElementById('inTema').addEventListener('input', function(e){ cfg.tema = e.target.value; persist(); renderDisplay(); });
+    document.getElementById('btnPrev').addEventListener('click', prev);
+    document.getElementById('btnNext').addEventListener('click', next);
+    document.getElementById('btnRandom').addEventListener('click', random);
+    document.getElementById('btnOcultar').addEventListener('click', hide);
+    document.getElementById('btnResetShown').addEventListener('click', resetShown);
+    document.getElementById('btnHidePanel').addEventListener('click', function(){ document.body.classList.add('panel-hidden'); });
+    document.getElementById('togglePanel').addEventListener('click', function(){ document.body.classList.remove('panel-hidden'); });
+    // atajos de teclado
+    document.addEventListener('keydown', function(e){
+      if (/input|textarea/i.test((e.target.tagName||''))) return;
+      if (e.key === 'ArrowRight') next();
+      else if (e.key === 'ArrowLeft') prev();
+      else if (e.key.toLowerCase() === 'r') random();
+      else if (e.key === 'Escape') hide();
+      else if (e.key.toLowerCase() === 'c') document.body.classList.toggle('panel-hidden');
+    });
+    // autocargar si ya había una fuente guardada, y arrancar auto-refresh si estaba activo
+    if (op.worker || cfg.github) cargar(preguntas.length > 0);
+    if (op.auto) setAuto(true);
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>

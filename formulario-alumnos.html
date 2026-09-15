@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dejá tu pregunta — ULP</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     Formulario público para que los alumnos dejen su pregunta.
+     Envía al Cloudflare Worker (POST /add) → GitHub.
+     >>> CONFIGURÁ WORKER_URL más abajo (al final del <script>). <<<
+     También se puede pasar por URL: ?api=https://tu-worker.workers.dev
+     y ?clase=Programación%20I
+     ============================================================ */
+  :root{
+    --naranja:#f6a01a; --naranja-2:#ffb648;
+    --bg-1:#0c1626; --bg-2:#0a1120;
+    --ink:#fff; --ink-soft:#aebacb;
+    --card:rgba(255,255,255,.06); --card-border:rgba(255,255,255,.14);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ min-height:100%; }
+  body{
+    font-family:'Poppins',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(900px 600px at 85% -10%, rgba(246,160,26,.16), transparent 60%),
+      radial-gradient(700px 600px at 0% 110%, rgba(246,160,26,.08), transparent 55%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .card{
+    width:100%; max-width:540px;
+    background:var(--card); border:1px solid var(--card-border);
+    border-radius:24px; padding:34px 30px 30px;
+    box-shadow:0 30px 70px rgba(0,0,0,.45); backdrop-filter:blur(8px);
+  }
+  .brand{ display:flex; align-items:center; gap:16px; margin-bottom:6px; }
+  .brand img{ height:52px; width:auto; display:block; }
+  h1{ font-size:1.7rem; font-weight:800; margin:18px 0 6px; line-height:1.15; }
+  .sub{ color:var(--ink-soft); font-size:1rem; font-weight:500; margin-bottom:8px; }
+  .clase{ display:none; margin:2px 0 18px; font-weight:700; color:var(--naranja-2); font-size:1.05rem; }
+  .clase.show{ display:block; }
+  form{ display:flex; flex-direction:column; gap:16px; margin-top:14px; }
+  label{ font-size:.9rem; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:7px; }
+  input,textarea{
+    width:100%; padding:14px 15px; border-radius:12px;
+    background:#0f1c30; border:1px solid rgba(255,255,255,.16); color:#fff;
+    font-family:inherit; font-size:1.05rem; font-weight:500; resize:vertical;
+  }
+  input:focus,textarea:focus{ outline:none; border-color:var(--naranja); box-shadow:0 0 0 3px rgba(246,160,26,.2); }
+  textarea{ min-height:120px; }
+  .counter{ text-align:right; font-size:.8rem; color:var(--ink-soft); margin-top:4px; }
+  button{
+    padding:15px; border:none; border-radius:12px; cursor:pointer;
+    font-family:inherit; font-size:1.1rem; font-weight:800; color:#1a1204;
+    background:linear-gradient(160deg,var(--naranja),#e08800);
+    transition:transform .1s, filter .15s;
+  }
+  button:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.06); }
+  button:disabled{ opacity:.6; cursor:default; }
+  .msg{ font-size:.95rem; font-weight:600; padding:12px 14px; border-radius:10px; display:none; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:rgba(60,200,120,.14); color:#7ee6a8; }
+  .msg.err{ background:rgba(240,80,80,.14); color:#ff9d9d; }
+  .done{ text-align:center; display:none; }
+  .done.show{ display:block; }
+  .done .check{
+    width:78px; height:78px; margin:6px auto 16px; border-radius:50%;
+    background:rgba(60,200,120,.16); display:flex; align-items:center; justify-content:center;
+  }
+  .done .check svg{ width:40px; height:40px; }
+  .done h2{ font-size:1.5rem; font-weight:800; margin-bottom:8px; }
+  .done p{ color:var(--ink-soft); margin-bottom:20px; }
+  .done button{ color:#fff; background:#1c2b44; }
+  .foot{ margin-top:18px; text-align:center; color:var(--ink-soft); font-size:.8rem; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand"><img src="ulp_header.svg" alt="Universidad de La Punta"></div>
+
+    <div id="formWrap">
+      <h1>Dejá tu pregunta</h1>
+      <p class="sub">Se la mostramos al profe durante la clase. No hace falta cuenta ni nombre.</p>
+      <p class="clase" id="claseLabel"></p>
+
+      <form id="form">
+        <div>
+          <label for="alumno">Tu nombre <span style="text-transform:none;color:var(--ink-soft);font-weight:500">(opcional)</span></label>
+          <input id="alumno" type="text" maxlength="60" placeholder="Ej: Sofía M." autocomplete="off">
+        </div>
+        <div>
+          <label for="pregunta">Tu pregunta</label>
+          <textarea id="pregunta" maxlength="400" placeholder="Escribí tu pregunta acá…" required></textarea>
+          <div class="counter"><span id="count">0</span>/400</div>
+        </div>
+        <div class="msg err" id="msg"></div>
+        <button type="submit" id="btn">Enviar pregunta</button>
+      </form>
+    </div>
+
+    <div class="done" id="done">
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#7ee6a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <h2>¡Pregunta enviada!</h2>
+      <p>Gracias. Si querés, podés dejar otra.</p>
+      <button id="otra">Hacer otra pregunta</button>
+    </div>
+
+    <div class="foot">Universidad de La Punta</div>
+  </div>
+
+<script>
+  /* ======================================================================
+     >>> PEGÁ ACÁ LA URL DE TU WORKER (o pasala por ?api=... en la URL) <<<
+     Ej: "https://ulp-preguntas.tu-usuario.workers.dev"
+     ====================================================================== */
+  var WORKER_URL = "https://ulp-preguntas.sparma.workers.dev";
+
+  (function(){
+    var params = new URLSearchParams(location.search);
+    var api = (params.get('api') || WORKER_URL || '').replace(/\/+$/,'');
+    var clase = params.get('clase') || '';
+    if (clase){ var cl = document.getElementById('claseLabel'); cl.textContent = clase; cl.classList.add('show'); }
+
+    var form = document.getElementById('form');
+    var alumno = document.getElementById('alumno');
+    var pregunta = document.getElementById('pregunta');
+    var count = document.getElementById('count');
+    var msg = document.getElementById('msg');
+    var btn = document.getElementById('btn');
+
+    pregunta.addEventListener('input', function(){ count.textContent = pregunta.value.length; });
+
+    function showMsg(text){ msg.textContent = text; msg.classList.add('show'); }
+    function hideMsg(){ msg.classList.remove('show'); }
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault(); hideMsg();
+      var texto = pregunta.value.trim();
+      if (texto.length < 3){ showMsg('Escribí una pregunta un poco más larga.'); return; }
+      if (!api){ showMsg('Falta configurar la URL del Worker (WORKER_URL). Avisale al profe.'); return; }
+
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      fetch(api + '/add', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ alumno: alumno.value.trim(), pregunta: texto })
+      }).then(function(r){ return r.json().catch(function(){ return {ok:false, error:'Respuesta inválida del servidor.'}; }); })
+      .then(function(d){
+        if (d && d.ok){
+          document.getElementById('formWrap').style.display = 'none';
+          document.getElementById('done').classList.add('show');
+        } else {
+          showMsg((d && d.error) || 'No se pudo enviar. Probá de nuevo.');
+          btn.disabled = false; btn.textContent = 'Enviar pregunta';
+        }
+      }).catch(function(err){
+        showMsg('Error de conexión: ' + err.message);
+        btn.disabled = false; btn.textContent = 'Enviar pregunta';
+      });
+    });
+
+    document.getElementById('otra').addEventListener('click', function(){
+      pregunta.value = ''; count.textContent = '0'; hideMsg();
+      btn.disabled = false; btn.textContent = 'Enviar pregunta';
+      document.getElementById('done').classList.remove('show');
+      document.getElementById('formWrap').style.display = '';
+      pregunta.focus();
+    });
+  })();
+</script>
+</body>
+</html>
