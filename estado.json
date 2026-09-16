@@ -4,7 +4,9 @@
   "modo": "enjambre",
   "index": -1,
   "visible": false,
-  "floatIdx": [],
+  "floatIdx": [
+    0
+  ],
   "qr": true,
-  "ts": 1789565768096
+  "ts": 1789565814572
 }
