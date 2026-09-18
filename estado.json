@@ -1,8 +1,8 @@
 {
   "clase": "Int. a la Programación",
   "tema": "Trabajo Práctico 04",
-  "modo": "enjambre",
-  "index": 2,
+  "modo": "foco",
+  "index": 3,
   "visible": true,
   "floatIdx": [
     1,
@@ -11,5 +11,5 @@
     3
   ],
   "qr": false,
-  "ts": 1789740493688
+  "ts": 1789740501267
 }
