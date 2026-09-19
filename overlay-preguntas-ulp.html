@@ -101,15 +101,18 @@
   @keyframes pulse{ 70%{ box-shadow: 0 0 0 16px rgba(246,160,26,0); } 100%{ box-shadow: 0 0 0 0 rgba(246,160,26,0); } }
 
   /* -------- ENJAMBRE: burbujas flotando sobre la mitad izquierda -------- */
-  .swarm{ position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  /* --bscale: factor de tamaño de las burbujas del enjambre.
+     Lo setea el JS por cantidad de preguntas flotando: 1-3 = 1 (tamaño actual),
+     y de ahí en más se va achicando (con piso) para que entren más sin encimarse. */
+  .swarm{ position: absolute; inset: 0; z-index: 3; pointer-events: none; --bscale: 1; }
   .bubble{ position: absolute; top: 0; left: 0; will-change: transform; }
   .bubble .card{
-    max-width: 32vw; min-width: 12vw;
+    max-width: calc(32vw * var(--bscale, 1)); min-width: calc(12vw * var(--bscale, 1));
     background: rgba(10,19,34,.60);
     border: 1px solid rgba(246,160,26,.35);
     border-left: 7px solid var(--naranja);
     border-radius: 18px;
-    padding: 1.4vh 1.5vw 1.5vh;
+    padding: calc(1.4vh * var(--bscale, 1)) calc(1.5vw * var(--bscale, 1)) calc(1.5vh * var(--bscale, 1));
     box-shadow: 0 16px 40px rgba(0,0,0,.42);
     backdrop-filter: blur(7px) saturate(130%);
     transform: scale(.4); opacity: 0; transform-origin: left center;
@@ -117,13 +120,13 @@
   }
   .bubble.in .card{ transform: scale(1); opacity: 1; }
   .bubble .btxt{
-    font-size: clamp(1.5rem, 1.95vw, 2.4rem);
+    font-size: calc(clamp(1.5rem, 1.95vw, 2.4rem) * var(--bscale, 1));
     font-weight: 600; line-height: 1.26; color: #fff;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
   }
   .bubble .bauthor{
     margin-top: .9vh; display: inline-flex; align-items: center; gap: 10px;
-    font-size: clamp(1.15rem, 1.5vw, 1.8rem); font-weight: 600; color: var(--naranja-2);
+    font-size: calc(clamp(1.15rem, 1.5vw, 1.8rem) * var(--bscale, 1)); font-weight: 600; color: var(--naranja-2);
   }
   .bubble .bauthor::before{
     content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--naranja); flex: none;
@@ -234,6 +237,9 @@
   .btn.primary{ background: linear-gradient(160deg, var(--naranja), #e08800); color: #1a1204; }
   .btn.primary:hover{ background: linear-gradient(160deg, var(--naranja-2), var(--naranja)); }
   .btn.ghost{ background: transparent; border: 1px solid rgba(255,255,255,.18); }
+  /* íconos monocromáticos (heredan el color del texto del botón) */
+  .ic{ width: 1em; height: 1em; display: inline-block; vertical-align: -.14em; flex: none; stroke-width: 2; }
+  .btn .ic, .modo button .ic{ margin-right: .5em; }
   /* segmento modo */
   .modo{ display: flex; gap: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; overflow: hidden; }
   .modo button{
@@ -360,13 +366,17 @@
         <input id="inTema" type="text" placeholder="Ej: Estructuras de control">
       </div>
 
+      <div class="row">
+        <button class="btn ghost" id="btnCopyObs" style="width:100%" title="Copia el enlace del overlay transparente (con la URL del Worker) para pegar como Browser Source en OBS"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar enlace para OBS</button>
+      </div>
+
       <div class="sep"></div>
 
       <div class="field">
         <label>Modo del overlay</label>
         <div class="modo" id="modo">
           <button data-modo="enjambre" class="on">🫧 Flotando</button>
-          <button data-modo="foco">🎯 Una en foco</button>
+          <button data-modo="foco"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Una en foco</button>
         </div>
         <span class="hint">Flotando: flotan SOLO las preguntas que elijas, con movimiento lento. Foco: mostrás una sola destacada.</span>
       </div>
@@ -400,7 +410,7 @@
     </div>
     <div class="foot-actions">
       <button class="btn ghost" id="btnResetShown">Reiniciar «ya mostradas»</button>
-      <button class="btn" id="btnVaciar" style="background:#5a1e1e">🗑 Vaciar todas</button>
+      <button class="btn" id="btnVaciar" style="background:#5a1e1e"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M18 7l-.8 12a2 2 0 0 1-2 1.9H8.8a2 2 0 0 1-2-1.9L6 7"/><path d="M10 11v6M14 11v6"/></svg>Vaciar todas</button>
       <button class="btn ghost" id="btnHidePanel" title="Ocultar panel">✕</button>
     </div>
   </aside>
@@ -408,6 +418,11 @@
 <script>
 (function(){
   "use strict";
+
+  /* ---------- íconos monocromáticos (heredan currentColor) ---------- */
+  var IC_TARGET = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
+  var IC_TRASH  = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M18 7l-.8 12a2 2 0 0 1-2 1.9H8.8a2 2 0 0 1-2-1.9L6 7"/><path d="M10 11v6M14 11v6"/></svg>';
+  var IC_ALERT  = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.3L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 
   /* ---------- parámetros / vista ---------- */
   var params = new URLSearchParams(location.search);
@@ -456,6 +471,36 @@
   function setStatus(msg, kind){
     var el = document.getElementById('status'); if(!el) return;
     el.className = 'status ' + (kind||'info'); el.textContent = msg;
+  }
+  // enlace del display TRANSPARENTE para OBS, con la URL del Worker embebida
+  // (el display no tiene panel para escribirla, la necesita en la URL).
+  function obsLink(){
+    var base = location.origin + location.pathname;
+    var u = base + '?vista=display&bg=transparente';
+    var w = (op.worker||'').trim().replace(/\/+$/,'');   // sin barra final
+    // worker va como último parámetro y sin encodear, para que el enlace
+    // quede legible (…&worker=https://…) — la URL del Worker no tiene
+    // caracteres que rompan el query string.
+    if (w) u += '&worker=' + w;
+    return u;
+  }
+  function legacyCopy(txt){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      var ok = document.execCommand('copy'); document.body.removeChild(ta);
+      return ok;
+    } catch(e){ return false; }
+  }
+  function copyText(txt){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(txt).then(
+        function(){ return true; },
+        function(){ return legacyCopy(txt); }   // si la API falla, probar el método viejo
+      );
+    }
+    return Promise.resolve(legacyCopy(txt));
   }
 
   /* ---------- red: /list y /state ---------- */
@@ -632,7 +677,21 @@
       bubbles.push(b);
       requestAnimationFrame(function(){ el.classList.add('in'); }); // entrada chica -> normal
     });
+    applyBubbleScale();
     ensureRaf();
+  }
+  // Achica las burbujas a medida que entran más preguntas seleccionadas.
+  // 1-3 preguntas = tamaño actual (escala 1). A partir de 4 baja 0.06 por
+  // pregunta extra, con piso 0.45 para que sigan siendo legibles.
+  function applyBubbleScale(){
+    if (!swarmEl) return;
+    var n = bubbles.length;
+    var s = n <= 3 ? 1 : Math.max(0.45, 1 - (n - 3) * 0.06);
+    swarmEl.style.setProperty('--bscale', s.toFixed(3));
+    // el cambio de tamaño altera el layout: remedir para colisión/clamp
+    bubbles.forEach(function(b){
+      if (b.el){ b.w = b.el.offsetWidth || b.w; b.h = b.el.offsetHeight || b.h; }
+    });
   }
   function updateBubbleContent(b, q){
     var txt = b.el.querySelector('.btxt'); if (txt) txt.innerHTML = esc(q.pregunta);
@@ -803,8 +862,8 @@
       var cls = 'qitem' + (active ? (isFoco?' active':' floating') : '') + (shown.has(i)?' shown':'');
       var autor = q.alumno ? '<b>'+esc(q.alumno)+'</b>' : '';
       var dot = isFoco ? '' : '<span class="fdot"></span>';
-      var focoBtn = '<span class="qfocus" data-foco="'+i+'" title="Hacer foco en esta pregunta">🎯</span>';
-      var delBtn  = '<span class="qdel" data-del="'+i+'" title="Borrar esta pregunta">🗑</span>';
+      var focoBtn = '<span class="qfocus" data-foco="'+i+'" title="Hacer foco en esta pregunta">'+IC_TARGET+'</span>';
+      var delBtn  = '<span class="qdel" data-del="'+i+'" title="Borrar esta pregunta">'+IC_TRASH+'</span>';
       return '<button class="'+cls+'" data-i="'+i+'">'+dot+'<span class="n">'+(i+1)+'</span><span class="txt">'+autor+esc(q.pregunta)+'</span>'+focoBtn+delBtn+'</button>';
     }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.qitem'), function(el){
@@ -828,9 +887,9 @@
         ev.stopPropagation();
         var i = parseInt(el.getAttribute('data-del'),10);
         if (el.getAttribute('data-arm') !== '1'){
-          el.setAttribute('data-arm','1'); el.classList.add('arm'); el.textContent='⚠';
+          el.setAttribute('data-arm','1'); el.classList.add('arm'); el.innerHTML=IC_ALERT;
           el.title = 'Tocá de nuevo para borrar';
-          setTimeout(function(){ el.setAttribute('data-arm','0'); el.classList.remove('arm'); el.textContent='🗑'; el.title='Borrar esta pregunta'; }, 3000);
+          setTimeout(function(){ el.setAttribute('data-arm','0'); el.classList.remove('arm'); el.innerHTML=IC_TRASH; el.title='Borrar esta pregunta'; }, 3000);
           return;
         }
         borrar(i);
@@ -848,6 +907,14 @@
       fetchList(); fetchState();
     });
     document.getElementById('btnRecargar').addEventListener('click', function(){ fetchList(); fetchState(); });
+    document.getElementById('btnCopyObs').addEventListener('click', function(){
+      var w = (op.worker||'').trim();
+      if (!w){ setStatus('Primero pegá la URL del Worker: el display transparente la necesita en el enlace.', 'err'); return; }
+      var url = obsLink();
+      copyText(url).then(function(ok){
+        setStatus(ok ? '✓ Enlace para OBS copiado (transparente). Pegalo en una fuente «Navegador» de OBS.' : ('No pude copiar solo. Copialo a mano: ' + url), ok ? 'ok' : 'info');
+      });
+    });
     document.getElementById('inWorker').addEventListener('change', function(e){ op.worker = e.target.value.trim(); persistOp(); });
     document.getElementById('inAdmin').addEventListener('input', function(e){ op.admin = e.target.value; persistOp(); });
     document.getElementById('inAuto').addEventListener('change', function(e){ setAuto(e.target.checked); });
@@ -865,10 +932,10 @@
     document.getElementById('btnFloatNone').addEventListener('click', floatNone);
     document.getElementById('btnResetShown').addEventListener('click', resetShown);
     (function(){
-      var b = document.getElementById('btnVaciar'), armed=false, tmr=null, txt=b.textContent;
+      var b = document.getElementById('btnVaciar'), armed=false, tmr=null, html=b.innerHTML;
       b.addEventListener('click', function(){
-        if (!armed){ armed=true; b.textContent='⚠ Tocá de nuevo'; tmr=setTimeout(function(){ armed=false; b.textContent=txt; },4000); return; }
-        clearTimeout(tmr); armed=false; b.textContent=txt; vaciar();
+        if (!armed){ armed=true; b.innerHTML=IC_ALERT+'Tocá de nuevo'; tmr=setTimeout(function(){ armed=false; b.innerHTML=html; },4000); return; }
+        clearTimeout(tmr); armed=false; b.innerHTML=html; vaciar();
       });
     })();
     document.getElementById('btnHidePanel').addEventListener('click', function(){ document.body.classList.add('panel-hidden'); });
