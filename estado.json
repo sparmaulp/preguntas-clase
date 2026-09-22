@@ -2,7 +2,7 @@
   "clase": "Int. a la Programación",
   "tema": "Tema: TP 05 | Comandos de Entrada y Salida de datos.",
   "modo": "foco",
-  "index": 2,
+  "index": 3,
   "visible": true,
   "floatIdx": [
     0,
@@ -10,5 +10,5 @@
     2
   ],
   "qr": false,
-  "ts": 1790099534853
+  "ts": 1790100194428
 }
