@@ -2,13 +2,13 @@
   "clase": "Int. a la Programación",
   "tema": "Tema: TP 05 | Comandos de Entrada y Salida de datos.",
   "modo": "enjambre",
-  "index": 3,
-  "visible": true,
+  "index": -1,
+  "visible": false,
   "floatIdx": [
     0,
     1,
     2
   ],
   "qr": false,
-  "ts": 1790118160633
+  "ts": 1790118165144
 }
