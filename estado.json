@@ -1,6 +1,6 @@
 {
   "clase": "Int. a la Programación",
-  "tema": "Tema: TP 06 | Comandos de Entrada y Salida de datos.",
+  "tema": "Tema: TP 06 | Acciones secuenciales",
   "modo": "enjambre",
   "index": -1,
   "visible": false,
@@ -10,5 +10,5 @@
     2
   ],
   "qr": true,
-  "ts": 1790702516908
+  "ts": 1790702630745
 }
