@@ -6,7 +6,7 @@
   "visible": false,
   "floatIdx": [],
   "qr": false,
-  "pantalla": "auto",
+  "pantalla": "preguntas",
   "interacciones": {
     "preguntas": true,
     "cuestionario": true,
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1790810859427
+  "ts": 1790810863402
 }
