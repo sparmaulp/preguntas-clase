@@ -1,13 +1,27 @@
 {
-  "clase": "Int. a la Programación",
-  "tema": "Tema: TP 06 | Acciones secuenciales",
+  "clase": "",
+  "tema": "",
   "modo": "enjambre",
   "index": -1,
   "visible": false,
-  "floatIdx": [
-    0,
-    1
-  ],
+  "floatIdx": [],
   "qr": true,
-  "ts": 1790702682460
+  "pantalla": "cuestionario",
+  "interacciones": {
+    "preguntas": true,
+    "cuestionario": true,
+    "encuesta": false,
+    "termometro": false,
+    "velocidad": false,
+    "temporizador": false
+  },
+  "marca": {
+    "institucion": "ulp",
+    "logoUrl": "",
+    "color": "",
+    "color2": ""
+  },
+  "mostrarClave": false,
+  "claveTexto": "",
+  "ts": 1790810089545
 }
