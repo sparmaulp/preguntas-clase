@@ -326,8 +326,8 @@
 
     <!-- QR al formulario de preguntas (abajo a la derecha, lejos de las burbujas) -->
     <div class="qrbox" id="qrbox">
-      <img src="qr-preguntas.svg" alt="QR para hacer preguntas">
-      <div class="qrcap">Escaneá y<br><b>hacé tu pregunta</b></div>
+      <img src="qr-alumno.svg" alt="QR de la clase">
+      <div class="qrcap">Escaneá y<br><b>participá</b></div>
     </div>
   </div>
 
@@ -447,10 +447,14 @@
 
   // overrides por URL (útil en la fuente de OBS)
   if (params.get('worker')) op.worker = params.get('worker');
+  if (params.get('clase')) op.clase = params.get('clase');
+  function claseQ(){ return (op.clase && op.clase!=='default') ? ('&clase='+encodeURIComponent(op.clase)) : ''; }
   if (params.get('clase'))  estado.clase = params.get('clase');
   if (params.get('tema'))   estado.tema  = params.get('tema');
   if (params.get('modo'))   estado.modo  = (params.get('modo').toLowerCase()==='foco'?'foco':'enjambre');
   if (params.get('qr') !== null) estado.qr = !(params.get('qr')==='0'||params.get('qr')==='false');
+  // chrome=0: oculta el header propio (lo pone el contenedor, en el hub de Clase ULP)
+  if (params.get('chrome') === '0'){ var _h=document.querySelector('.top'); if(_h) _h.style.display='none'; }
 
   /* ---------- utilidades ---------- */
   function load(k, def){ try{ var v = JSON.parse(localStorage.getItem(k)); return v==null?def:v; }catch(e){ return def; } }
@@ -507,7 +511,7 @@
   function fetchList(silencioso){
     var base = apiBase();
     if (!base){ if(!isDisplay) setStatus('Falta la URL del Worker.', 'err'); return Promise.resolve(); }
-    return fetch(base + '/list?t=' + Date.now())
+    return fetch(base + '/list?t=' + Date.now() + claseQ())
       .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(d){ if (d && d.ok === false) throw new Error(d.error||'error');
         preguntas = normalize((d && d.preguntas) || d);
@@ -520,7 +524,7 @@
 
   function fetchState(){
     var base = apiBase(); if (!base) return Promise.resolve();
-    return fetch(base + '/state?t=' + Date.now())
+    return fetch(base + '/state?t=' + Date.now() + claseQ())
       .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(d){ if (d && d.estado){ estado = Object.assign({}, ST_DEF, d.estado); renderAll(); } })
       .catch(function(){ /* worker viejo sin /state: ignorar en display */ });

@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clase ULP — panel / display</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ==================================================================
+     CLASE ULP (v3) — hub unificado: PREGUNTAS + CUESTIONARIO.
+       ?vista=control  -> panel del operador (pestañas Cuestionario/Preguntas)
+       ?vista=display  -> pantalla OBS: muestra el QUIZ si está activo,
+                          si no, las PREGUNTAS (reusa overlay-preguntas-ulp.html).
+     Display OBS: ?vista=display&worker=<URL>&bg=transparente&qr=0
+     ================================================================== */
+  :root{
+    --naranja:#f6a01a; --naranja-2:#ffb648; --naranja-d:#e08800;
+    --bg-1:#0c1626; --bg-2:#0a1120; --ink:#fff; --ink-soft:#aebacb;
+    --card:rgba(255,255,255,.06); --card-border:rgba(255,255,255,.14);
+    --ok:#3cc878; --err:#f05050;
+    --a:#f6a01a; --b:#e0563a; --c:#2f9e77; --d:#3b74d6; --e:#8b5cf6; --f:#d94f9c;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{ font-family:'Poppins',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink);
+    background:
+      radial-gradient(900px 600px at 85% -10%, rgba(246,160,26,.16), transparent 60%),
+      radial-gradient(700px 600px at 0% 110%, rgba(246,160,26,.08), transparent 55%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2)); min-height:100vh; }
+  body.transparente{ background:transparent !important; }
+  .hidden{ display:none !important; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ===== PANEL ===== */
+  #control{ max-width:1100px; margin:0 auto; padding:22px 20px 60px; }
+  #control h1{ font-size:1.5rem; font-weight:800; margin-bottom:4px; }
+  #control .lead{ color:var(--ink-soft); margin-bottom:18px; font-size:.95rem; }
+  .panel{ background:var(--card); border:1px solid var(--card-border); border-radius:16px; padding:18px; margin-bottom:16px; }
+  .panel h2{ font-size:1.02rem; font-weight:800; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .panel h2 .n{ background:var(--naranja); color:#12100a; width:24px; height:24px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; } .row.mt{ margin-top:10px; }
+  label.f{ font-size:.78rem; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:5px; }
+  input.t, textarea.t, select.t{ width:100%; padding:11px 12px; border-radius:10px; background:#0f1c30; border:1px solid rgba(255,255,255,.16); color:#fff; font-family:inherit; font-size:1rem; font-weight:500; }
+  input.t:focus, textarea.t:focus{ outline:none; border-color:var(--naranja); box-shadow:0 0 0 3px rgba(246,160,26,.18); }
+  .grow{ flex:1 1 220px; }
+  .btn{ padding:11px 15px; border:none; border-radius:10px; font-weight:800; font-size:.95rem; color:#12100a; background:linear-gradient(160deg,var(--naranja),var(--naranja-d)); transition:.1s; }
+  .btn:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.06); } .btn:disabled{ opacity:.5; cursor:default; }
+  .btn.ghost{ color:#fff; background:#1c2b44; } .btn.dark{ color:#fff; background:#152238; border:1px solid rgba(255,255,255,.14); }
+  .btn.ok{ color:#08240f; background:linear-gradient(160deg,#49d888,#2fae67); } .btn.warn{ color:#fff; background:linear-gradient(160deg,#e0563a,#b23a24); }
+  .btn.sm{ padding:8px 11px; font-size:.85rem; }
+  .status{ font-size:.9rem; font-weight:600; min-height:1.2em; } .status.ok{ color:#7ee6a8; } .status.err{ color:#ff9d9d; }
+  .chk{ display:inline-flex; align-items:center; gap:6px; font-size:.85rem; color:var(--ink-soft); font-weight:600; cursor:pointer; } .chk input{ width:16px; height:16px; accent-color:var(--naranja); }
+
+  /* tabs del panel */
+  .ptabs{ display:flex; flex-wrap:wrap; gap:8px; background:#0f1c30; border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:5px; margin-bottom:16px; max-width:760px; }
+  .ptabs button{ flex:1; padding:11px; border:none; border-radius:9px; font-weight:800; font-size:.98rem; color:var(--ink-soft); background:transparent; transition:.15s; }
+  .ptabs button.on{ background:linear-gradient(160deg,var(--naranja),var(--naranja-d)); color:#12100a; }
+
+  /* editor quiz */
+  .qcard{ border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:14px; margin-bottom:12px; background:rgba(255,255,255,.03); }
+  .qcard .qhead{ display:flex; align-items:center; gap:10px; margin-bottom:10px; } .qcard .qhead .qi{ font-weight:800; color:var(--naranja-2); }
+  .optline{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .optline .badge{ width:28px; height:28px; border-radius:8px; flex:none; display:flex; align-items:center; justify-content:center; font-weight:800; color:#12100a; }
+  .optline input.t{ flex:1; } .optline .corr{ display:flex; align-items:center; gap:6px; font-size:.82rem; color:var(--ink-soft); white-space:nowrap; } .optline .corr input{ width:18px; height:18px; accent-color:var(--ok); }
+  .badge.o0{background:var(--a)} .badge.o1{background:var(--b)} .badge.o2{background:var(--c)} .badge.o3{background:var(--d)} .badge.o4{background:var(--e)} .badge.o5{background:var(--f)}
+  .x{ background:transparent; border:none; color:#ff9d9d; font-size:1.2rem; font-weight:800; padding:0 6px; }
+  .curpreg{ font-size:1.12rem; font-weight:800; margin-bottom:4px; }
+  /* estado del cuestionario + control por tarjeta */
+  .qstate{ font-weight:800; padding:6px 14px; border-radius:999px; font-size:.95rem; white-space:nowrap; }
+  .qstate.off{ background:#33415a; color:#cdd8ea; }
+  .qstate.on{ background:rgba(60,200,120,.22); color:#7ee6a8; }
+  .qcard.live{ border-color:var(--naranja); box-shadow:0 0 0 2px rgba(246,160,26,.25); }
+  .qctrl{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+  .qctrl .envivo{ font-size:.78rem; font-weight:800; color:var(--naranja-2); text-transform:uppercase; letter-spacing:.05em; }
+  .fase-badge{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:.78rem; font-weight:800; }
+  .fase-lobby{ background:#33415a; color:#cdd8ea; } .fase-abierta{ background:rgba(60,200,120,.2); color:#7ee6a8; } .fase-cerrada{ background:rgba(246,160,26,.2); color:var(--naranja-2); } .fase-revelada{ background:rgba(59,116,214,.22); color:#9dc0ff; }
+  .resbar{ margin:8px 0; } .resbar .top{ display:flex; justify-content:space-between; font-size:.9rem; font-weight:700; margin-bottom:3px; } .resbar .track{ height:12px; border-radius:6px; background:rgba(255,255,255,.09); overflow:hidden; } .resbar .fill{ height:100%; border-radius:6px; transition:width .4s; } .resbar.correcta .top{ color:#7ee6a8; }
+  .navpreg{ display:flex; align-items:center; gap:8px; } .navpreg .idx{ font-weight:800; min-width:64px; text-align:center; }
+  .tot{ font-weight:800; }
+  .rank-item{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.08); font-size:.92rem; } .rank-item .p{ font-weight:800; color:var(--naranja-2); }
+
+  /* lista preguntas (panel) */
+  .qitem{ display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid rgba(255,255,255,.1); border-radius:10px; margin-bottom:7px; background:rgba(255,255,255,.03); }
+  .qitem .qtxt{ flex:1; font-size:.95rem; } .qitem .qwho{ font-size:.78rem; color:var(--ink-soft); }
+  .qitem.floating{ border-color:rgba(60,200,120,.5); }
+  .seg{ display:inline-flex; background:#0f1c30; border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:3px; }
+  .seg button{ border:none; background:transparent; color:var(--ink-soft); font-weight:800; font-size:.85rem; padding:7px 12px; border-radius:7px; } .seg button.on{ background:var(--naranja); color:#12100a; }
+
+  /* ===== ALUMNOS CONECTADOS (solo en el panel del profe, NUNCA en OBS) ===== */
+  #conectados{ position:fixed; top:14px; right:14px; z-index:40; width:210px; max-height:calc(100vh - 28px);
+    display:flex; flex-direction:column; background:var(--card); border:1px solid var(--card-border);
+    border-radius:14px; box-shadow:0 20px 50px rgba(0,0,0,.4); overflow:hidden; }
+  #conectados .chead{ display:flex; align-items:center; gap:8px; padding:11px 13px; font-weight:800; font-size:.92rem;
+    border-bottom:1px solid var(--card-border); background:rgba(255,255,255,.03); cursor:pointer; user-select:none; }
+  #conectados .cdot{ width:9px; height:9px; border-radius:50%; flex:none; background:var(--ok); box-shadow:0 0 0 3px rgba(60,200,120,.25); }
+  #conectados .cnum{ margin-left:auto; background:var(--naranja); color:#12100a; border-radius:999px; padding:1px 9px; font-size:.82rem; font-weight:800; }
+  #conectados .clist{ overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+  #conectados .citem{ display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:9px; background:rgba(255,255,255,.04); font-size:.88rem; font-weight:600; }
+  #conectados .citem .ci-dot{ width:7px; height:7px; border-radius:50%; flex:none; background:var(--ok); }
+  #conectados .citem.anon{ color:var(--ink-soft); font-weight:500; font-style:italic; }
+  #conectados .cempty{ color:var(--ink-soft); font-size:.85rem; padding:10px 9px; }
+  #conectados.collapsed .clist{ display:none; }
+  @media (max-width:1420px){ #conectados{ position:static; width:auto; max-height:none; margin:0 auto 16px; max-width:1100px; } #conectados .clist{ max-height:220px; flex-direction:row; flex-wrap:wrap; } #conectados .citem{ flex:0 0 auto; } }
+
+  /* ===== DISPLAY ===== */
+  #display{ position:relative; width:100vw; height:100vh; overflow:hidden; }
+  #dQuiz{ position:absolute; inset:0; padding:13vh 3.6vw 3vh; display:flex; flex-direction:column; align-items:flex-end; }
+  #dPreg{ position:absolute; inset:0; border:0; width:100%; height:100%; }
+  /* interacciones en OBS (encuesta / termómetro / temporizador) */
+  #dInter{ position:absolute; inset:0; padding:13vh 3.6vw 3vh; display:flex; justify-content:flex-end; }
+  #dInter .ibox{ width:min(760px,44vw); text-align:right; display:flex; flex-direction:column; }
+  #dInter.tempo{ justify-content:center; align-items:center; }
+  #dInter .tclock{ text-align:center; }
+  #dInter .tclock .lbl{ font-size:3vh; color:var(--ink-soft); font-weight:600; margin-bottom:1.4vh; }
+  #dInter .tclock .big{ font-size:17vh; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+  #dInter .tclock.fin .big{ color:var(--err); }
+  /* header COMPARTIDO (mismo para preguntas y cuestionario) — estilo "de antes" */
+  #display .top{ position:absolute; top:2.6vh; right:2.6vw; left:auto; z-index:6; display:flex; align-items:center; gap:1.6vw; text-shadow:0 2px 14px rgba(0,0,0,.55); }
+  #display .brand{ display:flex; align-items:center; flex:none; }
+  #display .brand img{ height:8.4vh; min-height:68px; max-height:108px; width:auto; display:block; filter:drop-shadow(0 2px 8px rgba(0,0,0,.5)); }
+  #display .top .divider{ width:3px; height:8vh; min-height:62px; background:linear-gradient(var(--naranja),transparent); border-radius:2px; opacity:.7; flex:none; }
+  #display .meta{ display:flex; flex-direction:column; gap:3px; min-width:0; text-align:right; align-items:flex-end; }
+  #display .meta .clase{ font-size:clamp(1.8rem,2.5vw,3rem); font-weight:800; line-height:1.08; letter-spacing:-.01em; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40vw; }
+  #display .meta .clase:empty, #display .meta .tema:empty{ display:none; }
+  #display .meta .tema{ display:inline-flex; align-items:center; gap:12px; font-size:clamp(1.35rem,1.85vw,2.1rem); font-weight:600; color:var(--naranja-2); }
+  #display .meta .tema::before{ content:""; width:15px; height:15px; border-radius:4px; flex:none; background:var(--naranja); box-shadow:0 0 14px var(--naranja); }
+  #display .live{ display:inline-flex; align-items:center; gap:12px; flex:none; padding:10px 24px; border-radius:999px; background:rgba(246,160,26,.12); border:1px solid rgba(246,160,26,.4); font-size:clamp(1.1rem,1.5vw,1.75rem); font-weight:800; color:var(--naranja-2); text-transform:uppercase; letter-spacing:.1em; }
+  #display .live .dot{ width:16px; height:16px; border-radius:50%; background:var(--naranja); box-shadow:0 0 0 0 rgba(246,160,26,.7); animation:pulseLive 1.8s infinite; }
+  #display .clavebadge{ display:inline-flex; align-items:center; gap:8px; flex:none; padding:10px 22px; border-radius:999px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25); font-size:clamp(1.1rem,1.5vw,1.75rem); font-weight:800; color:#fff; }
+  @keyframes pulseLive{ 70%{ box-shadow:0 0 0 16px rgba(246,160,26,0); } 100%{ box-shadow:0 0 0 0 rgba(246,160,26,0); } }
+  #display .dhead{ display:flex; align-items:center; gap:1.4vw; margin-bottom:1.4vh; }
+  #display .dhead .logo{ height:6.2vh; width:auto; } #display .dhead .dtitulo{ font-size:2.0vh; font-weight:800; color:var(--naranja-2); text-transform:uppercase; letter-spacing:.05em; }
+  #display .dhead .pill{ margin-left:auto; font-size:2.0vh; font-weight:800; padding:.7vh 1.4vw; border-radius:999px; background:rgba(246,160,26,.16); color:var(--naranja-2); border:1px solid rgba(246,160,26,.4); }
+  /* bloque del quiz: ANCHO FIJO y orientado a la DERECHA (deja la izquierda para la cámara) */
+  #display .qbox{ display:flex; flex-direction:column; flex:1; min-height:0; width:min(760px,44vw); text-align:right; }
+  #display .dnum{ font-size:1.9vh; font-weight:800; color:var(--ink-soft); margin-bottom:.5vh; }
+  #display .dq{ font-size:4.2vh; font-weight:800; line-height:1.12; margin-bottom:1.6vh; max-width:100%; }
+  #display .dopts{ display:flex; flex-direction:column; gap:1.1vh; flex:1; justify-content:flex-start; }
+  #display .dopt{ position:relative; display:flex; align-items:center; gap:1.1vw; overflow:hidden; padding:1.5vh 1.4vw; border-radius:1.1vh; background:#0f1c30; border:2px solid rgba(255,255,255,.14); transition:.3s; }
+  #display .dopt .dbar{ position:absolute; left:0; top:0; bottom:0; width:0; opacity:.24; transition:width .5s; z-index:0; }
+  #display .dopt > *{ position:relative; z-index:1; }
+  #display .dopt .dbadge{ flex:none; width:4.8vh; height:4.8vh; border-radius:1vh; display:flex; align-items:center; justify-content:center; font-weight:800; color:#12100a; font-size:2.5vh; }
+  #display .dopt .dtxt{ flex:1; font-size:2.7vh; font-weight:700; }
+  #display .dopt .dpct{ font-size:2.6vh; font-weight:800; color:#fff; min-width:4.6vw; text-align:right; } #display .dopt .dcount{ font-size:1.5vh; font-weight:600; color:var(--ink-soft); }
+  #display .dopt.o0 .dbadge{background:var(--a)} #display .dopt.o0 .dbar{background:var(--a)} #display .dopt.o1 .dbadge{background:var(--b)} #display .dopt.o1 .dbar{background:var(--b)} #display .dopt.o2 .dbadge{background:var(--c)} #display .dopt.o2 .dbar{background:var(--c)} #display .dopt.o3 .dbadge{background:var(--d)} #display .dopt.o3 .dbar{background:var(--d)} #display .dopt.o4 .dbadge{background:var(--e)} #display .dopt.o4 .dbar{background:var(--e)} #display .dopt.o5 .dbadge{background:var(--f)} #display .dopt.o5 .dbar{background:var(--f)}
+  #display .dopt.correcta{ border-color:var(--ok); background:rgba(60,200,120,.16); } #display .dopt.correcta .dbar{ opacity:.34; } #display .dopt.incorrecta{ opacity:.5; }
+  #display .dopt .check{ flex:none; width:3.8vh; height:3.8vh; display:none; } #display .dopt.correcta .check{ display:block; }
+  #display .totalvivo{ position:absolute; left:3.6vw; bottom:3vh; font-size:2.4vh; font-weight:800; color:var(--ink-soft); }
+  /* resumen final del autoguiado */
+  #display #dResumen{ overflow-y:auto; }
+  #display .dresumen-t{ font-size:2.4vh; font-weight:800; color:var(--ink-soft); margin-bottom:1.4vh; text-align:right; }
+  #display .resrow{ margin-bottom:1.3vh; }
+  #display .resrow .rtop{ display:flex; justify-content:space-between; gap:1vw; font-size:2.3vh; font-weight:700; margin-bottom:.5vh; }
+  #display .resrow .rq{ flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #display .resrow .rp{ font-weight:800; color:var(--naranja-2); white-space:nowrap; }
+  #display .resrow .rtrack{ height:1.5vh; border-radius:.8vh; background:rgba(255,255,255,.1); overflow:hidden; }
+  #display .resrow .rfill{ height:100%; border-radius:.8vh; background:linear-gradient(90deg,var(--ok),#2fae67); transition:width .5s; }
+  #display .qrbox{ position:absolute; right:3vw; bottom:3vh; text-align:center; background:rgba(255,255,255,.96); border-radius:1.4vh; padding:1.2vh; box-shadow:0 1vh 3vh rgba(0,0,0,.4); }
+  #display .qrbox img{ width:15vh; height:15vh; display:block; } #display .qrbox .cap{ margin-top:.6vh; font-size:1.7vh; font-weight:800; color:#12100a; }
+</style>
+</head>
+<body>
+
+<!-- ===================== PANEL ===================== -->
+<div id="control" class="hidden">
+  <h1>Clase ULP — panel del operador</h1>
+  <p class="lead">Un solo lugar para el <b>cuestionario</b> y las <b>preguntas</b>. Los alumnos entran por un <b>único enlace</b>. En OBS, la pantalla muestra el quiz cuando está activo; si no, las preguntas.</p>
+
+  <!-- Alumnos conectados (los que abrieron el portal del alumno). Solo en el panel del profe. -->
+  <div id="conectados" class="hidden">
+    <div class="chead" id="conHead" title="Tocá para plegar/desplegar"><span class="cdot"></span>Conectados<span class="cnum" id="conNum">0</span></div>
+    <div class="clist" id="conList"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">1</span> Conexión</h2>
+    <div class="row">
+      <div class="grow"><label class="f">URL del Worker (combinado)</label><input class="t" id="cWorker" placeholder="https://ulp-clase.tu-usuario.workers.dev"></div>
+      <div style="flex:0 0 220px"><label class="f">Clave de operador (ADMIN_KEY)</label><input class="t" id="cKey" type="password" placeholder="••••••"></div>
+    </div>
+    <div class="row mt">
+      <button class="btn" id="btnConectar">Conectar / Cargar</button>
+      <button class="btn ghost" id="btnLinkAlumnos">Copiar enlace para alumnos</button>
+      <span class="status" id="stConn"></span>
+    </div>
+    <div class="row mt" style="align-items:center">
+      <span class="f" style="margin:0">Enlace para OBS:</span>
+      <label class="chk"><input type="checkbox" id="obsBg" checked> Fondo transparente</label>
+      <button class="btn ghost" id="btnLinkObs">Copiar enlace para OBS</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">2</span> Clase, marca y pantalla</h2>
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:0 0 240px"><label class="f">Clase activa</label><select class="t" id="selClase"><option value="default">General (sin clave)</option></select></div>
+      <button class="btn dark sm" id="btnNuevaClase">+ Nueva</button>
+      <button class="btn warn sm" id="btnBorrarClase">Borrar</button>
+      <span class="status" id="stClase"></span>
+    </div>
+    <div class="row mt" id="rowNuevaClase" style="display:none; align-items:flex-end">
+      <div style="flex:0 0 150px"><label class="f">ID (letras/números)</label><input class="t" id="ncId" placeholder="redes1"></div>
+      <div class="grow"><label class="f">Título</label><input class="t" id="ncTitulo" placeholder="Redes I"></div>
+      <div style="flex:0 0 130px"><label class="f">Clave (opcional)</label><input class="t" id="ncClave" placeholder="1234"></div>
+      <button class="btn ok" id="btnCrearClase">Crear</button>
+    </div>
+    <div class="row mt">
+      <div class="grow"><label class="f">Título de la clase (en pantalla)</label><input class="t" id="pClase" placeholder="Ej: Programación I"></div>
+      <div class="grow"><label class="f">Tema</label><input class="t" id="pTema" placeholder="Ej: Funciones"></div>
+    </div>
+    <div class="row mt" style="align-items:center">
+      <span class="f" style="margin:0">Clave de la clase:</span>
+      <input class="t" id="claveClase" style="flex:0 0 150px" placeholder="(sin clave)">
+      <button class="btn dark sm" id="btnGuardarClave">Guardar clave</button>
+      <label class="chk"><input type="checkbox" id="chkMostrarClave"> Mostrar la clave en pantalla</label>
+    </div>
+    <div class="row mt" style="align-items:flex-end">
+      <div style="flex:0 0 180px"><label class="f">Institución (marca)</label><select class="t" id="selInst"><option value="ulp">ULP</option><option value="custom">Otra (personalizada)</option></select></div>
+      <div class="grow"><label class="f">Logo (URL, vacío = ULP)</label><input class="t" id="mLogo" placeholder="https://…/logo.png"></div>
+      <div style="flex:0 0 90px"><label class="f">Color</label><input type="color" id="mColor" value="#f6a01a" style="width:100%;height:42px;padding:2px;border-radius:10px;background:#0f1c30;border:1px solid rgba(255,255,255,.16)"></div>
+      <div style="flex:0 0 90px"><label class="f">Color 2</label><input type="color" id="mColor2" value="#e08800" style="width:100%;height:42px;padding:2px;border-radius:10px;background:#0f1c30;border:1px solid rgba(255,255,255,.16)"></div>
+      <button class="btn ok" id="btnGuardarMarca">Aplicar marca</button>
+    </div>
+    <div class="row mt" style="align-items:center">
+      <span class="f" style="margin:0">Qué mostrar en OBS:</span>
+      <div class="seg" id="segPantalla"><button data-p="auto" class="on">Auto</button><button data-p="preguntas">Preguntas</button><button data-p="cuestionario">Cuestionario</button><button data-p="encuesta">Encuesta</button><button data-p="velocidad">Ritmo</button><button data-p="termometro">¿Se entiende?</button><button data-p="temporizador">Tiempo</button></div>
+      <button class="btn dark sm" id="btnQr">QR: on</button>
+    </div>
+    <div class="row mt" style="align-items:center">
+      <span class="f" style="margin:0">Interacciones (menú del alumno):</span>
+      <label class="chk"><input type="checkbox" data-int="preguntas" checked> Preguntas</label>
+      <label class="chk"><input type="checkbox" data-int="cuestionario" checked> Cuestionario</label>
+      <label class="chk"><input type="checkbox" data-int="encuesta"> Encuesta</label>
+      <label class="chk"><input type="checkbox" data-int="velocidad"> Medidor: ritmo</label>
+      <label class="chk"><input type="checkbox" data-int="termometro"> Medidor: ¿se entiende?</label>
+      <label class="chk"><input type="checkbox" data-int="temporizador"> Temporizador</label>
+    </div>
+  </div>
+
+  <div class="ptabs" id="ptabs">
+    <button data-tab="secPreg" class="on">Preguntas</button>
+    <button data-tab="secQuiz">Cuestionario</button>
+    <button data-tab="secEnc">Encuesta</button>
+    <button data-tab="secTer">Medidores</button>
+    <button data-tab="secTem">Temporizador</button>
+  </div>
+
+  <!-- ===== TAB CUESTIONARIO ===== -->
+  <div id="secQuiz" class="hidden">
+    <!-- Estado del cuestionario (arriba) -->
+    <div class="panel" id="quizStatePanel">
+      <div class="row" style="align-items:center; gap:12px">
+        <span class="qstate off" id="qStateBadge">● Desactivado</span>
+        <button class="btn ok" id="btnActivar">Activar en vivo</button>
+        <button class="btn" id="btnActivarLibre" title="Los alumnos responden todo el cuestionario a su ritmo">Activar autoguiado</button>
+        <button class="btn warn hidden" id="btnDesactivar">Desactivar cuestionario</button>
+        <span class="lead" id="qStateInfo" style="margin:0"></span>
+        <span style="flex:1"></span>
+        <button class="btn dark sm" id="btnReset">Vaciar respuestas</button>
+        <button class="btn dark sm" id="btnRanking">Ver ranking</button>
+      </div>
+      <div class="row hidden" id="libreCtrl" style="margin-top:10px; align-items:center">
+        <button class="btn dark" id="btnLibreResponder">Volver a que respondan</button>
+        <button class="btn" id="btnLibreResultados">Resumen general en pantalla</button>
+        <span class="lead" style="margin:0">…o mostrá los resultados pregunta por pregunta desde cada tarjeta ↓</span>
+      </div>
+      <div id="resVivo" style="margin-top:12px"></div>
+      <div id="rankBox" class="hidden" style="margin-top:12px"></div>
+    </div>
+
+    <!-- Preguntas: editar y lanzar cada una desde su tarjeta -->
+    <div class="panel">
+      <h2><span class="n">3</span> Preguntas <span style="font-size:.78rem;color:var(--ink-soft);font-weight:600">(editá y lanzá cada una desde su tarjeta)</span></h2>
+      <div class="row" style="align-items:flex-end; margin-bottom:6px">
+        <div style="flex:0 0 240px"><label class="f">Formulario</label><select class="t" id="selForm"><option value="default">Cuestionario principal</option></select></div>
+        <button class="btn dark sm" id="btnNuevoForm">+ Nuevo</button>
+        <button class="btn warn sm" id="btnBorrarForm">Borrar</button>
+        <span class="status" id="stForm"></span>
+      </div>
+      <div class="row" id="rowNuevoForm" style="display:none; align-items:flex-end; margin-bottom:6px">
+        <div style="flex:0 0 150px"><label class="f">ID</label><input class="t" id="nfId" placeholder="parcial1"></div>
+        <div class="grow"><label class="f">Nombre</label><input class="t" id="nfNombre" placeholder="Parcial 1"></div>
+        <button class="btn ok" id="btnCrearForm">Crear</button>
+      </div>
+      <div class="row"><div class="grow"><label class="f">Título (opcional)</label><input class="t" id="cTitulo" placeholder="Ej: Repaso — Redes I"></div></div>
+      <div id="qlist" style="margin-top:14px"></div>
+      <div class="row"><button class="btn dark sm" id="btnAddQ">+ Agregar pregunta</button><button class="btn dark sm" id="btnAddVF">+ Verdadero/Falso</button><button class="btn ok" id="btnGuardar">Guardar cambios</button><span class="status" id="stGuardar"></span></div>
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-weight:800;color:var(--naranja-2)">Importar varias preguntas (formato GIFT)</summary>
+        <p class="lead" style="margin:8px 0 6px">Pegá varias preguntas en <b>formato GIFT</b> (un bloque por pregunta, separados por una línea en blanco). Se <b>agregan</b> a las de arriba. Soporta opción múltiple (<code>=</code> correcta, <code>~</code> incorrecta) y verdadero/falso (<code>{T}</code>/<code>{F}</code>).</p>
+        <textarea class="t" id="giftText" style="min-height:130px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem" placeholder="¿Qué protocolo traduce un dominio a IP? { =DNS ~DHCP ~FTP }&#10;&#10;La dirección IPv4 tiene 32 bits. {T}"></textarea>
+        <div class="row mt"><button class="btn" id="btnGift">Importar GIFT</button><button class="btn dark sm" id="btnGiftEjemplo">Pegar ejemplo</button><span class="status" id="stGift"></span></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ===== TAB PREGUNTAS ===== -->
+  <div id="secPreg">
+    <div class="panel">
+      <h2><span class="n">3</span> Modo de las preguntas</h2>
+      <div class="row" style="align-items:center">
+        <span class="f" style="margin:0">Modo pantalla:</span>
+        <div class="seg" id="segModo"><button data-m="enjambre" class="on">Enjambre</button><button data-m="foco">Foco</button></div>
+        <button class="btn dark sm" id="btnVisible">Mostrar preguntas</button>
+        <button class="btn warn sm" id="btnResetPreg">Vaciar preguntas</button>
+        <span class="status" id="stPreg"></span>
+      </div>
+      <p class="lead" style="margin:10px 0 0">La clase, el tema y el QR se configuran arriba (valen para las dos pantallas). En OBS se ve según "Qué mostrar".</p>
+    </div>
+    <div class="panel">
+      <h2><span class="n">4</span> Preguntas de los alumnos <span style="font-size:.8rem;color:var(--ink-soft);font-weight:600" id="pCount"></span></h2>
+      <div id="pList"></div>
+    </div>
+  </div>
+
+  <!-- ===== TAB ENCUESTA ===== -->
+  <div id="secEnc" class="hidden">
+    <div class="panel">
+      <h2><span class="n">3</span> Encuesta <span style="font-size:.78rem;color:var(--ink-soft);font-weight:600">(opinión, sin respuesta correcta)</span></h2>
+      <div class="row"><div class="grow"><label class="f">Pregunta</label><input class="t" id="encPregunta" placeholder="Ej: ¿Qué tema seguimos?"></div></div>
+      <div class="row mt"><div class="grow"><label class="f">Opciones (una por línea)</label><textarea class="t" id="encOpciones" style="min-height:90px" placeholder="Opción A&#10;Opción B&#10;Opción C"></textarea></div></div>
+      <div class="row mt">
+        <button class="btn ok" id="btnEncAbrir">Abrir votación</button>
+        <button class="btn warn" id="btnEncCerrar">Cerrar</button>
+        <button class="btn dark sm" id="btnEncReset">Vaciar votos</button>
+        <span class="status" id="stEnc"></span>
+      </div>
+      <div id="encRes" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- ===== TAB TERMÓMETRO ===== -->
+  <div id="secTer" class="hidden">
+    <div class="panel">
+      <h2><span class="n">3</span> Medidores <span style="font-size:.78rem;color:var(--ink-soft);font-weight:600">(velocímetros en la barra inferior del alumno)</span></h2>
+      <p class="lead" style="margin:0 0 12px">Habilitá cada medidor en “Interacciones” (arriba). Acá lo abrís/cerrás y ves el promedio de la clase en vivo. El alumno puede cambiar su respuesta cuando quiera.</p>
+      <div class="row" style="align-items:center">
+        <span class="f" style="margin:0;flex:0 0 150px">🏃 Ritmo del profe</span>
+        <button class="btn ok" id="btnVelAbrir">Abrir</button>
+        <button class="btn warn" id="btnVelCerrar">Cerrar</button>
+        <button class="btn dark sm" id="btnVelReset">Vaciar</button>
+        <span class="status" id="stVel"></span>
+      </div>
+      <p class="lead" style="margin:6px 0 0">Escala: Muy lento · Lento · <b>Ritmo justo</b> · Rápido · Muy rápido (lo ideal es el centro).</p>
+      <div id="velRes" style="margin:6px 0 18px"></div>
+      <div class="row" style="align-items:center">
+        <span class="f" style="margin:0;flex:0 0 150px">🎯 ¿Se entiende?</span>
+        <button class="btn ok" id="btnTerAbrir">Abrir</button>
+        <button class="btn warn" id="btnTerCerrar">Cerrar</button>
+        <button class="btn dark sm" id="btnTerReset">Vaciar</button>
+        <span class="status" id="stTer"></span>
+      </div>
+      <p class="lead" style="margin:6px 0 0">Escala: Perdido · Me cuesta · Más o menos · Bien · <b>Todo claro</b> (mejor a la derecha).</p>
+      <div id="terRes" style="margin-top:6px"></div>
+    </div>
+  </div>
+
+  <!-- ===== TAB TEMPORIZADOR ===== -->
+  <div id="secTem" class="hidden">
+    <div class="panel">
+      <h2><span class="n">3</span> Temporizador / cuenta regresiva</h2>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:0 0 110px"><label class="f">Minutos</label><input class="t" id="temMin" type="number" min="0" value="5"></div>
+        <div style="flex:0 0 110px"><label class="f">Segundos</label><input class="t" id="temSeg" type="number" min="0" max="59" value="0"></div>
+        <div class="grow"><label class="f">Etiqueta (opcional)</label><input class="t" id="temEtiqueta" placeholder="Ej: Resolvé el ejercicio"></div>
+      </div>
+      <div class="row mt">
+        <button class="btn ok" id="btnTemIniciar">Iniciar</button>
+        <button class="btn warn" id="btnTemParar">Parar</button>
+        <span class="status" id="stTem"></span>
+      </div>
+      <p class="lead" style="margin:8px 0 0">Se ve en OBS (elegí "Tiempo" en Qué mostrar) y en el menú del alumno.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== DISPLAY ===================== -->
+<div id="display" class="hidden">
+  <!-- HEADER COMPARTIDO (mismo para preguntas y cuestionario) -->
+  <header id="dTop" class="top hidden">
+    <span class="clavebadge hidden" id="dClaveBadge"></span>
+    <span class="live"><span class="dot"></span> <span id="dLive">En vivo</span></span>
+    <span class="divider"></span>
+    <div class="meta"><span class="clase" id="dClase"></span><span class="tema" id="dTema"></span></div>
+    <span class="brand"><img src="ulp_header.svg" alt="Universidad de La Punta" onerror="this.style.display='none'"></span>
+  </header>
+  <!-- Contenido: Quiz -->
+  <div id="dQuiz" class="hidden">
+    <div class="qbox hidden" id="dQbox"><div class="dnum" id="dNum"></div><div class="dq" id="dQ"></div><div class="dopts" id="dOpts"></div></div>
+    <div class="qbox hidden" id="dLobby" style="align-items:center;justify-content:center;text-align:center">
+      <div class="dq" id="dLobbyBig" style="max-width:100%">El cuestionario está por empezar</div>
+      <div class="dnum" id="dLobbySub" style="font-size:3vh">Escaneá el QR o entrá al enlace</div>
+    </div>
+    <div class="qbox hidden" id="dResumen" style="justify-content:flex-start"></div>
+    <div class="totalvivo hidden" id="dTotal"></div>
+    <div class="qrbox hidden" id="dQr"><img id="dQrImg" src="qr-alumno.svg" alt="QR" onerror="this.parentNode.classList.add('hidden')"><div class="cap">Participá</div></div>
+  </div>
+  <!-- Contenido: Preguntas (iframe con header propio oculto, chrome=0) -->
+  <iframe id="dPreg" class="hidden" title="Preguntas"></iframe>
+  <!-- Contenido: interacciones (encuesta / termómetro / temporizador) -->
+  <div id="dInter" class="hidden"></div>
+</div>
+
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var vista = (params.get('vista') || 'control').toLowerCase();
+  var LETRAS = ['A','B','C','D','E','F'];
+  var op = { worker:'', key:'', clase:'default', form:'default' };
+  try { op = Object.assign(op, JSON.parse(localStorage.getItem('ulp_clase_op') || '{}')); } catch(e){}
+  if(!op.clase) op.clase='default';
+  if(!op.form) op.form='default';
+  function formQ(path){ return path + (path.indexOf('?')>=0?'&':'?') + 'form=' + encodeURIComponent(op.form||'default'); }
+  function saveOp(){ try { localStorage.setItem('ulp_clase_op', JSON.stringify(op)); } catch(e){} }
+  function api(){ return (op.worker||'').replace(/\/+$/,''); }
+  function withClase(path){ if(!op.clase || op.clase==='default') return path; return path + (path.indexOf('?')>=0?'&':'?') + 'clase=' + encodeURIComponent(op.clase); }
+  function req(path, method, body, withKey){
+    var headers = { 'Content-Type':'application/json' }; if (withKey) headers['X-Admin-Key'] = op.key||'';
+    return fetch(api()+withClase(path), { method:method||'GET', headers:headers, body:body?JSON.stringify(body):undefined })
+      .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'Respuesta inválida.'}; }); });
+  }
+  function aplicarMarca(m){ m=m||{}; try{ var r=document.documentElement.style;
+    r.setProperty('--naranja', m.color||'#f6a01a');
+    r.setProperty('--naranja-2', m.color2||m.color||'#ffb648');
+    r.setProperty('--naranja-d', m.color2||m.color||'#e08800');
+    var logo=m.logoUrl||'ulp_header.svg';
+    document.querySelectorAll('.brand img, .top .brand img').forEach(function(im){ if(im.getAttribute('src')!==logo) im.setAttribute('src', logo); im.style.display=''; });
+  }catch(e){} }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+  function alumnosLink(clave){
+    var base = location.origin + location.pathname.replace(/[^/]*$/,'') + 'alumno.html';
+    var q=[]; if(op.worker) q.push('api='+encodeURIComponent(op.worker.replace(/\/+$/,'')));
+    if(op.clase && op.clase!=='default') q.push('clase='+encodeURIComponent(op.clase));
+    if(clave) q.push('clave='+encodeURIComponent(clave));
+    return base + (q.length?('?'+q.join('&')):'');
+  }
+
+  /* ============================ DISPLAY ============================ */
+  if (vista === 'display'){
+    document.getElementById('display').classList.remove('hidden');
+    var bg = (params.get('bg')||'') === 'transparente'; if (bg) document.body.classList.add('transparente');
+    var qrBase = params.get('qr') !== '0';   // ?qr=0 fuerza el QR apagado
+    var showQr = qrBase;                       // se recalcula por tick con estado.qr (toggle del panel)
+    op.worker = params.get('worker') || params.get('api') || op.worker || '';
+    op.clase = params.get('clase') || 'default';
+
+    var dTop=document.getElementById('dTop'), dLive=document.getElementById('dLive'), dClase=document.getElementById('dClase'), dTema=document.getElementById('dTema'), dClaveBadge=document.getElementById('dClaveBadge');
+    var dQuiz = document.getElementById('dQuiz'), dPreg = document.getElementById('dPreg'), dInter = document.getElementById('dInter');
+    var dTempo = { activo:false, fin:0, etiqueta:'' }, interView='', curPantalla='';
+    var d = { qbox:document.getElementById('dQbox'),
+      num:document.getElementById('dNum'), q:document.getElementById('dQ'), opts:document.getElementById('dOpts'),
+      lobby:document.getElementById('dLobby'), lobbyBig:document.getElementById('dLobbyBig'), lobbySub:document.getElementById('dLobbySub'),
+      total:document.getElementById('dTotal'), qr:document.getElementById('dQr'), resumen:document.getElementById('dResumen') };
+    // iframe de preguntas con SU header oculto (chrome=0): el header lo pone este contenedor (idéntico para ambos)
+    var w = (op.worker||'').replace(/\/+$/,'');
+    dPreg.src = 'overlay-preguntas-ulp.html?vista=display&chrome=0&worker=' + w + (bg?'&bg=transparente':'') + (showQr?'':'&qr=0') + (op.clase&&op.clase!=='default'?('&clase='+encodeURIComponent(op.clase)):'');
+    dTop.classList.remove('hidden');
+
+    var def = { titulo:'', preguntas:[] }, lastKey='', modoActual='', defForm='default';
+    function getDef(form){ form=form||'default'; return req('/quiz/def?form='+encodeURIComponent(form)).then(function(r){ if(r&&r.ok){ def=r.def||def; defForm=form; } }); }
+    function mostrar(mode){ if(modoActual===mode) return; modoActual=mode; dQuiz.classList.toggle('hidden', mode!=='quiz'); dPreg.classList.toggle('hidden', mode!=='preg'); dInter.classList.toggle('hidden', mode!=='inter'); if(mode!=='inter') interView=''; }
+    function setHeader(mode, clase, tema, sub){ dClase.textContent=clase||''; dTema.textContent=tema||''; dLive.textContent = mode==='quiz'?'Cuestionario en vivo' : mode==='preg'?'Preguntas en vivo' : sub==='encuesta'?'Encuesta en vivo' : sub==='termometro'?'¿Se entiende?' : sub==='velocidad'?'Ritmo del profe' : sub==='temporizador'?'Cuenta regresiva' : 'En vivo'; }
+    function renderInterVot(tipo, data){
+      dInter.classList.remove('tempo');
+      var e=(data&&data.estado)||{}, conteo=(data&&data.conteo)||[], total=(data&&data.total)||0;
+      var key=tipo+'|'+((e.opciones||[]).join('|'));
+      if(interView!==key){ interView=key;
+        var opts=(e.opciones||[]).map(function(txt,i){ return '<div class="dopt o'+i+'"><div class="dbar" data-i="'+i+'"></div><div class="dbadge">'+LETRAS[i]+'</div><div class="dtxt">'+escapeHtml(txt)+'</div><div style="text-align:right"><div class="dpct" data-pct="'+i+'">0%</div><div class="dcount" data-cnt="'+i+'"></div></div></div>'; }).join('');
+        dInter.innerHTML='<div class="ibox"><div class="dnum">'+(tipo==='termometro'?'¿Se entiende?':tipo==='velocidad'?'Ritmo del profe':'Encuesta')+'</div><div class="dq">'+escapeHtml(e.pregunta||'')+'</div><div class="dopts">'+(opts||'<div class="dnum">Esperando respuestas…</div>')+'</div></div>';
+      }
+      var rows=dInter.querySelectorAll('.dopt');
+      for(var i=0;i<rows.length;i++){ var cc=conteo[i]||0, pct=total>0?Math.round(cc*100/total):0; var bar=rows[i].querySelector('[data-i="'+i+'"]'), pe=rows[i].querySelector('[data-pct="'+i+'"]'), ce=rows[i].querySelector('[data-cnt="'+i+'"]'); if(bar) bar.style.width=pct+'%'; if(pe) pe.textContent=pct+'%'; if(ce) ce.textContent=cc===1?'1 voto':cc+' votos'; }
+    }
+    function renderInterTempo(){
+      dInter.classList.add('tempo');
+      if(interView!=='tempo'){ interView='tempo'; dInter.innerHTML='<div class="tclock"><div class="lbl" id="tcLbl"></div><div class="big" id="tcBig">—</div></div>'; }
+      var rem = dTempo.activo ? Math.max(0, dTempo.fin - Date.now()) : 0;
+      var lbl=dInter.querySelector('#tcLbl'), big=dInter.querySelector('#tcBig'), clk=dInter.querySelector('.tclock');
+      if(!dTempo.activo){ if(lbl) lbl.textContent='Sin temporizador'; if(big) big.textContent='—'; if(clk) clk.classList.remove('fin'); return; }
+      if(lbl) lbl.textContent=dTempo.etiqueta||'Tiempo restante';
+      var s=Math.ceil(rem/1000), m=Math.floor(s/60); s=s%60; if(big) big.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+      if(clk) clk.classList.toggle('fin', rem<=0);
+    }
+    setInterval(function(){ if(curPantalla==='temporizador' && modoActual==='inter') renderInterTempo(); }, 250);
+    function renderQuizLobby(big, sub){ d.qbox.classList.add('hidden'); d.resumen.classList.add('hidden'); d.total.classList.add('hidden'); d.lobby.classList.remove('hidden'); d.lobbyBig.textContent=big; d.lobbySub.textContent=sub; d.qr.classList.toggle('hidden', !showQr); }
+    function renderResumen(){
+      d.qbox.classList.add('hidden'); d.lobby.classList.add('hidden'); d.total.classList.add('hidden'); d.qr.classList.add('hidden');
+      d.resumen.classList.remove('hidden');
+      req('/quiz/resumen').then(function(r){
+        if(!r||!r.ok) return;
+        var html='<div class="dresumen-t">Resultados · '+r.preguntas.length+' pregunta'+(r.preguntas.length===1?'':'s')+'</div>';
+        html+=r.preguntas.map(function(pp,i){ return '<div class="resrow"><div class="rtop"><span class="rq">'+(i+1)+'. '+escapeHtml(pp.q)+'</span><span class="rp">'+pp.pct+'% ('+pp.aciertos+'/'+pp.total+')</span></div><div class="rtrack"><div class="rfill" style="width:'+pp.pct+'%"></div></div></div>'; }).join('');
+        d.resumen.innerHTML=html;
+      }).catch(function(){});
+    }
+    function renderQuiz(estado, resumen){
+      var p = def.preguntas[estado.index];
+      if (!p){ renderQuizLobby('Preparando…','Ya viene la próxima pregunta'); return; }
+      d.lobby.classList.add('hidden'); d.resumen.classList.add('hidden'); d.qbox.classList.remove('hidden');
+      d.num.textContent='Pregunta '+(estado.index+1)+' de '+def.preguntas.length; d.q.textContent=p.q;
+      var conteo=(resumen&&resumen.conteo)||[], total=(resumen&&resumen.total)||0, correcta=(resumen&&typeof resumen.correcta==='number')?resumen.correcta:-1, revelada=estado.fase==='revelada';
+      var key = estado.index+'|'+p.opciones.length+'|'+estado.fase;
+      if (key !== lastKey){
+        d.opts.innerHTML='';
+        p.opciones.forEach(function(txt,i){
+          var row=document.createElement('div'); row.className='dopt o'+i;
+          row.innerHTML='<div class="dbar" data-i="'+i+'"></div><div class="dbadge">'+LETRAS[i]+'</div><div class="dtxt">'+escapeHtml(txt)+'</div><svg class="check" viewBox="0 0 24 24" fill="none" stroke="#3cc878" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><div style="text-align:right"><div class="dpct" data-pct="'+i+'">0%</div><div class="dcount" data-cnt="'+i+'"></div></div>';
+          d.opts.appendChild(row);
+        });
+        lastKey = key;
+      }
+      var rows=d.opts.children;
+      for (var i=0;i<rows.length;i++){
+        var cc=conteo[i]||0, pct=total>0?Math.round(cc*100/total):0;
+        var bar=rows[i].querySelector('[data-i="'+i+'"]'), pctEl=rows[i].querySelector('[data-pct="'+i+'"]'), cntEl=rows[i].querySelector('[data-cnt="'+i+'"]');
+        if(bar) bar.style.width=pct+'%'; if(pctEl) pctEl.textContent=pct+'%'; if(cntEl) cntEl.textContent=cc===1?'1 voto':cc+' votos';
+        rows[i].classList.remove('correcta','incorrecta');
+        if(revelada && correcta>=0){ if(i===correcta) rows[i].classList.add('correcta'); else rows[i].classList.add('incorrecta'); }
+      }
+      d.total.classList.remove('hidden'); d.total.textContent = total===1?'1 respuesta':total+' respuestas';
+      d.qr.classList.toggle('hidden', !(showQr && estado.fase==='abierta'));
+    }
+    function tick(){
+      Promise.all([ req('/quiz/estado'), req('/state') ]).then(function(res){
+        var qe=res[0]||{}, ps=res[1]||{};
+        var pe = (ps.ok && ps.estado) ? ps.estado : {};
+        var qest = (qe.ok && qe.estado) ? qe.estado : {activo:false};
+        if(qest.form && qest.form!==defForm) getDef(qest.form);
+        var pantalla = pe.pantalla || 'auto';
+        var quizActivo = !!qest.activo;
+        showQr = qrBase && (pe.qr !== false);  // el QR se habilita/deshabilita desde el panel
+        curPantalla = pantalla;
+        aplicarMarca(pe.marca);
+        if(dClaveBadge){ if(pe.mostrarClave && pe.claveTexto){ dClaveBadge.textContent='🔑 Clave: '+pe.claveTexto; dClaveBadge.classList.remove('hidden'); } else dClaveBadge.classList.add('hidden'); }
+        // interacciones en OBS
+        if (pantalla==='encuesta' || pantalla==='termometro' || pantalla==='velocidad'){
+          mostrar('inter'); setHeader('inter', pe.clase, pe.tema, pantalla);
+          req('/votacion?tipo='+pantalla).then(function(dd){ if(dd&&dd.ok && curPantalla===pantalla) renderInterVot(pantalla, dd); });
+          return;
+        }
+        if (pantalla==='temporizador'){
+          mostrar('inter'); setHeader('inter', pe.clase, pe.tema, 'temporizador');
+          req('/temporizador').then(function(dd){ if(dd&&dd.ok) dTempo=dd.estado; });
+          renderInterTempo();
+          return;
+        }
+        // qué mostrar (quiz / preguntas)
+        var showQuiz = (pantalla==='cuestionario') || (pantalla==='auto' && quizActivo);
+        if (showQuiz){
+          mostrar('quiz'); setHeader('quiz', pe.clase, pe.tema);
+          if (qest.activo && qest.libre){
+            if(qest.fase==='resumen') renderResumen();
+            else if(qest.fase==='cerrada' || qest.fase==='revelada') renderQuiz(qest, qe.resumen);
+            else renderQuizLobby('Resolvé el cuestionario', 'En tu celular, a tu ritmo — escaneá el QR o entrá al enlace');
+          }
+          else if (qest.activo && qest.fase && qest.fase!=='lobby') renderQuiz(qest, qe.resumen);
+          else renderQuizLobby(quizActivo?'Preparando la próxima pregunta':'El cuestionario está por empezar', quizActivo?'Ya viene':'Escaneá el QR o entrá al enlace');
+        } else {
+          mostrar('preg'); setHeader('preg', pe.clase, pe.tema); // preguntas en el iframe
+        }
+      }).catch(function(){});
+    }
+    getDef('default').then(function(){ tick(); setInterval(tick,1500); setInterval(function(){ getDef(defForm); },15000); });
+    return;
+  }
+
+  /* ============================ PANEL ============================ */
+  document.getElementById('control').classList.remove('hidden');
+  function $(id){ return document.getElementById(id); }
+  function setStatus(node,msg,ok){ node.textContent=msg||''; node.className='status '+(ok===true?'ok':(ok===false?'err':'')); }
+  $('cWorker').value = op.worker||''; $('cKey').value = op.key||'';
+
+  // tabs (genérico por data-tab)
+  var SECCIONES=['secPreg','secQuiz','secEnc','secTer','secTem'];
+  Array.prototype.forEach.call($('ptabs').children, function(b){ b.addEventListener('click', function(){
+    Array.prototype.forEach.call($('ptabs').children, function(x){ x.classList.remove('on'); }); b.classList.add('on');
+    var t=b.getAttribute('data-tab'); SECCIONES.forEach(function(id){ $(id).classList.toggle('hidden', id!==t); });
+  }); });
+
+  /* ---- copiar / conectar ---- */
+  function copiar(text,node,okMsg){ function done(){ setStatus(node,'✓ '+okMsg,true); } if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done,function(){ legacy(text,node,done); }); } else legacy(text,node,done); }
+  function legacy(text,node,done){ try{ var ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); }catch(e){ setStatus(node,'Copialo a mano: '+text,false); } }
+  $('btnLinkAlumnos').addEventListener('click', function(){ op.worker=$('cWorker').value.trim(); saveOp(); var cv=($('claveClase')&&$('claveClase').value)?$('claveClase').value.trim():''; copiar(alumnosLink(cv), $('stConn'), 'Enlace para alumnos copiado'+(cv?' (con clave)':'')+((op.clase&&op.clase!=='default')?(' · '+op.clase):'')); });
+  $('btnLinkObs').addEventListener('click', function(){ op.worker=$('cWorker').value.trim(); saveOp(); if(!op.worker){ setStatus($('stConn'),'Poné la URL del Worker primero.',false); return; }
+    var params='?vista=display';
+    if($('obsBg').checked) params+='&bg=transparente';
+    params+='&worker='+op.worker.replace(/\/+$/,'');
+    if(op.clase && op.clase!=='default') params+='&clase='+encodeURIComponent(op.clase);
+    copiar(location.origin+location.pathname+params, $('stConn'), 'Enlace para OBS copiado'+($('obsBg').checked?' (transparente)':''));
+  });
+
+  function conectar(){
+    op.worker=$('cWorker').value.trim(); op.key=$('cKey').value.trim(); saveOp();
+    if(!op.worker){ setStatus($('stConn'),'Poné la URL del Worker.',false); return; }
+    setStatus($('stConn'),'Cargando…');
+    req(formQ('/quiz/def/full'),'GET',null,true).then(function(r){
+      if(r&&r.ok){ quiz=r.def&&r.def.preguntas?r.def:{titulo:'',preguntas:[]}; if(!quiz.preguntas) quiz.preguntas=[]; renderEditor(); setStatus($('stConn'),'✓ Conectado ('+quiz.preguntas.length+' preguntas en el quiz).',true); }
+      else setStatus($('stConn'), r&&r.error?r.error:'No se pudo cargar.', false);
+      arrancarVivo(); arrancarPreg(); arrancarVot(); arrancarPresencia(); cargarClases(); cargarFormularios();
+    }).catch(function(err){ setStatus($('stConn'),'Error: '+err.message,false); });
+  }
+  // Recarga sólo el editor del cuestionario para el formulario op.form seleccionado
+  function cargarDefForm(){
+    return req(formQ('/quiz/def/full'),'GET',null,true).then(function(r){
+      if(r&&r.ok){ quiz=r.def&&r.def.preguntas?r.def:{titulo:'',preguntas:[]}; if(!quiz.preguntas) quiz.preguntas=[]; renderEditor(); setStatus($('stForm'),'✓ Cargado ('+quiz.preguntas.length+' preguntas).',true); }
+      else setStatus($('stForm'), r&&r.error?r.error:'No se pudo cargar.', false);
+    });
+  }
+  $('btnConectar').addEventListener('click', conectar);
+
+  /* ---------- CLASES (multi-clase) + CLAVE + MARCA ---------- */
+  var clasesCache=[];
+  function cargarClases(cb){
+    req('/clases','GET',null,true).then(function(r){
+      clasesCache=(r&&r.ok&&r.clases)?r.clases:[];
+      var sel=$('selClase');
+      sel.innerHTML='<option value="default">General (sin clave)</option>'+clasesCache.map(function(c){ return '<option value="'+escapeHtml(c.id)+'">'+escapeHtml(c.titulo||c.id)+' ('+escapeHtml(c.id)+')</option>'; }).join('');
+      sel.value=op.clase; if(sel.value!==op.clase){ op.clase='default'; saveOp(); sel.value='default'; }
+      var meta=clasesCache.filter(function(c){return c.id===op.clase;})[0];
+      $('claveClase').value=meta?(meta.clave||''):'';
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+  }
+  $('selClase').addEventListener('change', function(){ op.clase=$('selClase').value||'default'; saveOp(); if(op.worker) conectar(); });
+  $('btnNuevaClase').addEventListener('click', function(){ var r=$('rowNuevaClase'); r.style.display=r.style.display==='none'?'':'none'; });
+  $('btnCrearClase').addEventListener('click', function(){
+    var id=($('ncId').value||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,''); if(!id){ setStatus($('stClase'),'Poné un id (letras/números).',false); return; }
+    req('/clases','POST',{id:id, titulo:$('ncTitulo').value.trim(), clave:$('ncClave').value.trim()}, true).then(function(r){
+      if(r&&r.ok){ op.clase=id; saveOp(); $('rowNuevaClase').style.display='none'; $('ncId').value=''; $('ncTitulo').value=''; $('ncClave').value=''; setStatus($('stClase'),'✓ Clase creada.',true); conectar(); }
+      else setStatus($('stClase'), (r&&r.error)||'No se pudo.', false);
+    });
+  });
+  $('btnBorrarClase').addEventListener('click', function(){
+    if(op.clase==='default'){ setStatus($('stClase'),'No se puede borrar la clase General.',false); return; }
+    if($('btnBorrarClase')._a){ req('/clases/borrar','POST',{id:op.clase},true).then(function(){ op.clase='default'; saveOp(); setStatus($('stClase'),'Clase quitada del listado (los datos quedan en el repo).',true); conectar(); }); $('btnBorrarClase')._a=false; }
+    else { $('btnBorrarClase')._a=true; setStatus($('stClase'),'Tocá otra vez para confirmar.',false); setTimeout(function(){ $('btnBorrarClase')._a=false; },3000); }
+  });
+  $('btnGuardarClave').addEventListener('click', function(){
+    if(op.clase==='default'){ setStatus($('stClase'),'La clase General no tiene clave. Creá una clase primero.',false); return; }
+    var meta=clasesCache.filter(function(c){return c.id===op.clase;})[0]||{id:op.clase,titulo:''};
+    req('/clases','POST',{id:op.clase, titulo:meta.titulo||$('pClase').value.trim(), clave:$('claveClase').value.trim()}, true).then(function(r){ if(r&&r.ok){ setStatus($('stClase'),'✓ Clave guardada.',true); cargarClases(); } else setStatus($('stClase'),(r&&r.error)||'No se pudo.',false); });
+  });
+  $('chkMostrarClave').addEventListener('change', function(){ pEstado.mostrarClave=$('chkMostrarClave').checked; pEstado.claveTexto=$('chkMostrarClave').checked?$('claveClase').value.trim():''; pushPregState(); });
+
+  /* ---------- FORMULARIOS (varios cuestionarios por clase) ---------- */
+  var formsCache=[];
+  function cargarFormularios(cb){
+    req('/formularios','GET',null,true).then(function(r){
+      formsCache=(r&&r.ok&&r.formularios)?r.formularios:[];
+      var sel=$('selForm');
+      sel.innerHTML='<option value="default">Cuestionario principal</option>'+formsCache.map(function(f){ return '<option value="'+escapeHtml(f.id)+'">'+escapeHtml(f.nombre||f.id)+' ('+escapeHtml(f.id)+')</option>'; }).join('');
+      sel.value=op.form; if(sel.value!==op.form){ op.form='default'; saveOp(); sel.value='default'; }
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+  }
+  $('selForm').addEventListener('change', function(){ op.form=$('selForm').value||'default'; saveOp(); if(op.worker) cargarDefForm(); });
+  $('btnNuevoForm').addEventListener('click', function(){ var r=$('rowNuevoForm'); r.style.display=r.style.display==='none'?'':'none'; });
+  $('btnCrearForm').addEventListener('click', function(){
+    var id=($('nfId').value||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,''); if(!id||id==='default'){ setStatus($('stForm'),'Poné un id (no "default").',false); return; }
+    var nombre=$('nfNombre').value.trim();
+    req('/formularios','POST',{id:id, nombre:nombre}, true).then(function(r){
+      if(r&&r.ok){ op.form=id; saveOp(); $('rowNuevoForm').style.display='none'; $('nfId').value=''; $('nfNombre').value=''; cargarFormularios(function(){ $('selForm').value=op.form; }); quiz={titulo:nombre||'',preguntas:[]}; renderEditor(); guardarDef(true); setStatus($('stForm'),'✓ Formulario creado.',true); }
+      else setStatus($('stForm'), (r&&r.error)||'No se pudo.', false);
+    });
+  });
+  $('btnBorrarForm').addEventListener('click', function(){
+    if(op.form==='default'){ setStatus($('stForm'),'No se puede borrar el cuestionario principal.',false); return; }
+    if($('btnBorrarForm')._a){ req('/formularios/borrar','POST',{id:op.form},true).then(function(){ op.form='default'; saveOp(); setStatus($('stForm'),'Formulario quitado del listado.',true); cargarFormularios(function(){ $('selForm').value='default'; cargarDefForm(); }); }); $('btnBorrarForm')._a=false; }
+    else { $('btnBorrarForm')._a=true; setStatus($('stForm'),'Tocá otra vez para confirmar.',false); setTimeout(function(){ $('btnBorrarForm')._a=false; },3000); }
+  });
+  // Marca
+  $('selInst').addEventListener('change', function(){ if($('selInst').value==='ulp'){ $('mLogo').value=''; $('mColor').value='#f6a01a'; $('mColor2').value='#e08800'; } });
+  $('btnGuardarMarca').addEventListener('click', function(){
+    var esUlp=$('selInst').value==='ulp';
+    var marca={ institucion:$('selInst').value, logoUrl: esUlp?'':$('mLogo').value.trim(), color: esUlp?'#f6a01a':$('mColor').value, color2: esUlp?'#e08800':$('mColor2').value };
+    pEstado.marca=marca; pushPregState(); aplicarMarca(marca); setStatus($('stClase'),'✓ Marca aplicada.',true);
+  });
+
+  /* ==================== CUESTIONARIO (editor + control por tarjeta) ==================== */
+  var quiz = { titulo:'', preguntas:[] };
+  var vivo = { activo:false, index:-1, fase:'lobby', libre:false };
+  var lastResumen = null;
+  function nuevaPregunta(){ return { q:'', opciones:['',''], correcta:0 }; }
+  function faseLabel(f){ return { lobby:'En lobby', abierta:'Abierta', cerrada:'Cerrada', revelada:'Revelada' }[f] || f; }
+  function renderEditor(){
+    $('cTitulo').value = quiz.titulo||''; $('qlist').innerHTML='';
+    quiz.preguntas.forEach(function(p,qi){ $('qlist').appendChild(qcardEl(p,qi)); });
+    if(!quiz.preguntas.length){ var h=document.createElement('p'); h.className='lead'; h.textContent='Todavía no hay preguntas. Agregá la primera 👇'; $('qlist').appendChild(h); }
+    refreshLiveControls(lastResumen);
+  }
+  function qcardEl(p,qi){
+    var card=document.createElement('div'); card.className='qcard'; card.setAttribute('data-qi', qi);
+    var head=document.createElement('div'); head.className='qhead'; head.innerHTML='<span class="qi">P'+(qi+1)+'</span>';
+    var qin=document.createElement('input'); qin.className='t grow'; qin.placeholder='Escribí la pregunta…'; qin.value=p.q||''; qin.addEventListener('input',function(){ p.q=qin.value; });
+    var del=document.createElement('button'); del.className='x'; del.textContent='✕'; del.addEventListener('click',function(){ quiz.preguntas.splice(qi,1); renderEditor(); });
+    head.appendChild(qin); head.appendChild(del); card.appendChild(head);
+    p.opciones.forEach(function(o,oi){ card.appendChild(optlineEl(p,qi,oi)); });
+    var addOpt=document.createElement('button'); addOpt.className='btn dark sm'; addOpt.textContent='+ Opción'; addOpt.addEventListener('click',function(){ if(p.opciones.length<6){ p.opciones.push(''); renderEditor(); } });
+    var wrap=document.createElement('div'); wrap.className='row'; wrap.style.marginTop='4px'; wrap.appendChild(addOpt); card.appendChild(wrap);
+    var ctrl=document.createElement('div'); ctrl.className='qctrl'; card.appendChild(ctrl); // controles de lanzamiento (se llenan en refreshLiveControls)
+    return card;
+  }
+  function optlineEl(p,qi,oi){
+    var line=document.createElement('div'); line.className='optline';
+    var badge=document.createElement('span'); badge.className='badge o'+oi; badge.textContent=LETRAS[oi];
+    var inp=document.createElement('input'); inp.className='t'; inp.placeholder='Opción '+LETRAS[oi]; inp.value=p.opciones[oi]||''; inp.addEventListener('input',function(){ p.opciones[oi]=inp.value; });
+    var corr=document.createElement('label'); corr.className='corr';
+    var radio=document.createElement('input'); radio.type='radio'; radio.name='corr-'+qi; radio.checked=(p.correcta===oi); radio.addEventListener('change',function(){ if(radio.checked) p.correcta=oi; });
+    corr.appendChild(radio); corr.appendChild(document.createTextNode('correcta'));
+    var del=document.createElement('button'); del.className='x'; del.textContent='✕'; del.addEventListener('click',function(){ if(p.opciones.length<=2) return; p.opciones.splice(oi,1); if(p.correcta>=p.opciones.length) p.correcta=0; else if(p.correcta>oi) p.correcta--; renderEditor(); });
+    line.appendChild(badge); line.appendChild(inp); line.appendChild(corr); line.appendChild(del);
+    return line;
+  }
+  $('btnAddQ').addEventListener('click', function(){ quiz.preguntas.push(nuevaPregunta()); renderEditor(); });
+  $('btnAddVF').addEventListener('click', function(){ quiz.preguntas.push({ q:'', opciones:['Verdadero','Falso'], correcta:0 }); renderEditor(); window.scrollTo(0,document.body.scrollHeight); });
+  $('cTitulo').addEventListener('input', function(){ quiz.titulo=$('cTitulo').value; });
+
+  /* ---- Importar GIFT (varias preguntas de una) ---- */
+  function giftUnescape(s){ return String(s).replace(/\\([=~{}#:\\])/g,'$1'); }
+  function parseGift(text){
+    var out=[], skipped=0;
+    var clean = String(text||'').split('\n').filter(function(l){ return !/^\s*\/\//.test(l); }).join('\n');
+    var blocks = clean.split(/\n[ \t]*\n/);
+    blocks.forEach(function(raw){
+      var block=(raw||'').trim(); if(!block) return;
+      var open=block.indexOf('{'), close=block.lastIndexOf('}');
+      if(open<0||close<0||close<open){ skipped++; return; }
+      var qtext=block.slice(0,open).replace(/^\s*::(.*?)::\s*/,'').trim().replace(/\s+/g,' ');
+      qtext=giftUnescape(qtext);
+      var ans=block.slice(open+1,close).trim();
+      if(!qtext){ skipped++; return; }
+      var tf=ans.replace(/\s+/g,'').toUpperCase();
+      if(tf==='T'||tf==='TRUE'||tf==='F'||tf==='FALSE'){ out.push({ q:qtext, opciones:['Verdadero','Falso'], correcta:(tf==='T'||tf==='TRUE')?0:1 }); return; }
+      var opciones=[], correcta=-1, re=/([=~])((?:\\.|[^=~])*)/g, m;
+      while((m=re.exec(ans))){
+        var sign=m[1], val=m[2];
+        val=val.replace(/#(?:\\.|[^=~])*/,'').replace(/^%[-0-9.]+%/,'');
+        val=giftUnescape(val.trim());
+        if(val==='') continue;
+        if(sign==='=' && correcta<0) correcta=opciones.length;
+        opciones.push(val);
+      }
+      if(opciones.length>=2 && correcta>=0) out.push({ q:qtext, opciones:opciones.slice(0,6), correcta:Math.min(correcta,5) });
+      else skipped++;
+    });
+    return { added:out, skipped:skipped };
+  }
+  $('btnGift').addEventListener('click', function(){
+    var res=parseGift($('giftText').value);
+    if(!res.added.length){ setStatus($('stGift'), 'No se reconoció ninguna pregunta GIFT válida.', false); return; }
+    quiz.preguntas = quiz.preguntas.concat(res.added); renderEditor();
+    $('giftText').value='';
+    setStatus($('stGift'), '✓ '+res.added.length+' pregunta(s) importada(s)'+(res.skipped?(' — '+res.skipped+' ignorada(s)'):'')+'. Revisá y Guardá.', true);
+  });
+  $('btnGiftEjemplo').addEventListener('click', function(){
+    $('giftText').value = '¿Qué protocolo traduce un dominio a IP? { =DNS ~DHCP ~FTP }\n\n::IPv4:: La dirección IPv4 tiene 32 bits. {T}\n\nEl modelo OSI tiene {~5 =7 ~4} capas.';
+  });
+  function guardarDef(silencioso){
+    op.worker=$('cWorker').value.trim(); op.key=$('cKey').value.trim(); saveOp();
+    if(!op.worker||!op.key){ setStatus($('stGuardar'),'Falta Worker o clave.',false); return Promise.reject(new Error('falta-conexion')); }
+    for(var i=0;i<quiz.preguntas.length;i++){ var p=quiz.preguntas[i]; var ops=p.opciones.filter(function(o){return (o||'').trim()!=='';});
+      if(!(p.q||'').trim()){ setStatus($('stGuardar'),'La pregunta '+(i+1)+' está vacía.',false); return Promise.reject(new Error('vacia')); }
+      if(ops.length<2){ setStatus($('stGuardar'),'La pregunta '+(i+1)+' necesita 2 opciones.',false); return Promise.reject(new Error('opciones')); }
+      if(p.correcta<0||p.correcta>=p.opciones.length||!(p.opciones[p.correcta]||'').trim()){ setStatus($('stGuardar'),'Marcá la correcta de la pregunta '+(i+1)+'.',false); return Promise.reject(new Error('correcta')); } }
+    if(!silencioso) setStatus($('stGuardar'),'Guardando…');
+    return req(formQ('/quiz/def'),'POST',{def:quiz},true).then(function(r){
+      if(r&&r.ok){ if(!silencioso) setStatus($('stGuardar'),'✓ Guardado.',true); return r; }
+      setStatus($('stGuardar'), r&&r.error?r.error:'No se pudo guardar.', false); throw new Error('save');
+    });
+  }
+  $('btnGuardar').addEventListener('click', function(){ guardarDef(false).catch(function(){}); });
+
+  /* ---- control en vivo ---- */
+  function postEstado(patch){ Object.assign(vivo,patch); return req('/quiz/estado','POST',{estado:vivo},true).then(function(r){ if(r&&r.ok){ vivo=r.estado; lastResumen=r.resumen; refreshLiveControls(lastResumen); } return r; }); }
+  function abrirPregunta(qi){ guardarDef(true).then(function(){ postEstado({activo:true,index:qi,fase:'abierta',form:op.form}); }).catch(function(){ setStatus($('stGuardar'),'Revisá/completá la pregunta antes de abrirla.',false); }); }
+  $('btnActivar').addEventListener('click', function(){ var idx=vivo.index<0?(quiz.preguntas.length?0:-1):vivo.index; postEstado({activo:true,libre:false,index:idx,fase:'lobby',form:op.form}); });
+  $('btnActivarLibre').addEventListener('click', function(){ guardarDef(true).then(function(){ postEstado({activo:true,libre:true,fase:'lobby',form:op.form}); }).catch(function(){ setStatus($('stGuardar'),'Revisá/completá las preguntas antes de activar.',false); }); });
+  $('btnDesactivar').addEventListener('click', function(){ postEstado({activo:false,libre:false,fase:'lobby'}); });
+  $('btnLibreResultados').addEventListener('click', function(){ postEstado({fase:'resumen'}); });
+  $('btnLibreResponder').addEventListener('click', function(){ postEstado({fase:'abierta'}); });
+  // Abrir / Cerrar / Revelar por tarjeta (delegación en #qlist)
+  $('qlist').addEventListener('click', function(e){
+    var b=e.target.closest('[data-act]'); if(!b) return;
+    var card=b.closest('.qcard'); if(!card) return; var qi=+card.getAttribute('data-qi');
+    var act=b.getAttribute('data-act');
+    if(act==='abrir') abrirPregunta(qi);
+    else if(act==='cerrar') postEstado({fase:'cerrada'});
+    else if(act==='revelar') postEstado({fase:'revelada'});
+    else if(act==='mostrar') postEstado({fase:'cerrada', index:qi});   // autoguiado: mostrar resultados de esta pregunta
+    else if(act==='revelarq') postEstado({fase:'revelada', index:qi}); // autoguiado: revelar la correcta de esta pregunta
+  });
+  $('btnReset').addEventListener('click', function(){
+    if($('btnReset')._armed){ clearTimeout($('btnReset')._t); $('btnReset')._armed=false; req('/quiz/reset','POST',{},true).then(function(){ setStatus($('stGuardar'),'✓ Respuestas del quiz vaciadas.',true); lastResumen=null; refreshLiveControls(null); }); }
+    else { $('btnReset')._armed=true; setStatus($('stGuardar'),'Tocá otra vez para confirmar el vaciado.',false); $('btnReset')._t=setTimeout(function(){ $('btnReset')._armed=false; setStatus($('stGuardar'),''); },3000); }
+  });
+  $('btnRanking').addEventListener('click', function(){
+    req('/quiz/ranking','GET',null,true).then(function(r){ if(!r||!r.ok){ setStatus($('stGuardar'), r&&r.error?r.error:'No se pudo.', false); return; }
+      var rk=r.ranking||[]; $('rankBox').classList.remove('hidden');
+      if(!rk.length){ $('rankBox').innerHTML='<p class="lead">Todavía no hay respuestas con nombre para rankear.</p>'; return; }
+      $('rankBox').innerHTML='<h2 style="font-size:.95rem;margin-bottom:8px">🏆 Ranking</h2>'+rk.map(function(x,i){ return '<div class="rank-item"><span><span class="p">'+(i+1)+'.</span> '+escapeHtml(x.nombre)+'</span><span>'+x.aciertos+'/'+x.respondidas+'</span></div>'; }).join('');
+    });
+  });
+  // Actualiza la barra de estado (arriba) + los controles de cada tarjeta
+  function refreshLiveControls(resumen){
+    var badge=$('qStateBadge');
+    if(vivo.activo){ badge.textContent = vivo.libre ? '● Activo (autoguiado)' : '● Activo (en vivo)'; badge.className='qstate on'; $('btnActivar').classList.add('hidden'); $('btnActivarLibre').classList.add('hidden'); $('btnDesactivar').classList.remove('hidden'); }
+    else { badge.textContent='● Desactivado'; badge.className='qstate off'; $('btnActivar').classList.remove('hidden'); $('btnActivarLibre').classList.remove('hidden'); $('btnDesactivar').classList.add('hidden'); }
+    var cards=$('qlist').querySelectorAll('.qcard');
+    if(vivo.activo && vivo.libre){
+      $('libreCtrl').classList.remove('hidden');
+      var f=vivo.fase;
+      $('qStateInfo').textContent = (f==='resumen') ? 'Mostrando el RESUMEN general en la pantalla.'
+        : (f==='cerrada'||f==='revelada') ? ('Mostrando la pregunta '+(vivo.index+1)+' en la pantalla'+(f==='revelada'?' (con la correcta).':' (sin revelar todavía).'))
+        : 'Los alumnos resuelven TODO el cuestionario a su ritmo (responden una y aparece la siguiente).';
+      $('resVivo').innerHTML='';
+      Array.prototype.forEach.call(cards, function(card){
+        var qi=+card.getAttribute('data-qi'); var ctrl=card.querySelector('.qctrl'); if(!ctrl) return;
+        var enPantalla=(f==='cerrada'||f==='revelada') && vivo.index===qi;
+        card.classList.toggle('live', enPantalla);
+        ctrl.innerHTML=(enPantalla?'<span class="envivo">● En pantalla'+(f==='revelada'?' · correcta revelada':'')+'</span>':'')
+          +'<button class="btn ok sm" data-act="mostrar">'+(enPantalla?'Actualizar':'Mostrar resultado')+'</button>'
+          +'<button class="btn sm" data-act="revelarq">Revelar correcta</button>';
+      });
+      return;
+    }
+    $('libreCtrl').classList.add('hidden');
+    var p=quiz.preguntas[vivo.index];
+    if(vivo.activo && p){ var total=resumen?(resumen.total||0):0; $('qStateInfo').textContent='Pregunta '+(vivo.index+1)+' de '+quiz.preguntas.length+' · '+faseLabel(vivo.fase)+' · '+(total===1?'1 respuesta':total+' respuestas'); }
+    else if(vivo.activo){ $('qStateInfo').textContent='Tocá "Abrir para responder" en una pregunta.'; }
+    else { $('qStateInfo').textContent=''; }
+    if(vivo.activo && p && resumen){
+      var conteo=resumen.conteo||[], tot=resumen.total||0, correcta=(typeof resumen.correcta==='number')?resumen.correcta:-1;
+      $('resVivo').innerHTML='<div class="curpreg">'+escapeHtml(p.q)+'</div>'+p.opciones.map(function(txt,i){ var cnt=conteo[i]||0, pct=tot>0?Math.round(cnt*100/tot):0; var es=(correcta===i); var col=['var(--a)','var(--b)','var(--c)','var(--d)','var(--e)','var(--f)'][i]; return '<div class="resbar'+(es?' correcta':'')+'"><div class="top"><span>'+LETRAS[i]+'. '+escapeHtml(txt)+(es?' ✓':'')+'</span><span>'+pct+'% ('+cnt+')</span></div><div class="track"><div class="fill" style="width:'+pct+'%;background:'+col+'"></div></div></div>'; }).join('');
+    } else { $('resVivo').innerHTML=''; }
+    Array.prototype.forEach.call(cards, function(card){
+      var qi=+card.getAttribute('data-qi'); var ctrl=card.querySelector('.qctrl'); if(!ctrl) return;
+      var isLive=vivo.activo && vivo.index===qi; card.classList.toggle('live', isLive);
+      if(isLive){
+        ctrl.innerHTML='<span class="envivo">● En vivo · '+faseLabel(vivo.fase)+'</span>'
+          +'<button class="btn ok sm" data-act="abrir">'+(vivo.fase==='abierta'?'Reabrir':'Abrir para responder')+'</button>'
+          +'<button class="btn dark sm" data-act="cerrar">Cerrar</button>'
+          +'<button class="btn sm" data-act="revelar">Revelar correcta</button>';
+      } else {
+        ctrl.innerHTML='<button class="btn ok sm" data-act="abrir">Abrir para responder</button>';
+      }
+    });
+  }
+  var vivoTimer=null;
+  function arrancarVivo(){ if(vivoTimer) return; function tick(){ if(!op.worker) return; req('/quiz/estado').then(function(r){ if(r&&r.ok){ vivo=r.estado; lastResumen=r.resumen; refreshLiveControls(lastResumen); } }); } tick(); vivoTimer=setInterval(tick,2000); }
+
+  /* ==================== PREGUNTAS (clase + lista) ==================== */
+  var pEstado = { clase:'', tema:'', modo:'enjambre', index:-1, visible:false, floatIdx:[], qr:true, pantalla:'auto', interacciones:{preguntas:true,cuestionario:true,encuesta:false,velocidad:false,termometro:false,temporizador:false} };
+  var pLista = [];
+  function pushPregState(){ req('/state','POST',{estado:pEstado},true).then(function(r){ if(r&&r.ok) pEstado=r.estado; }); }
+  $('pClase').addEventListener('input', function(){ pEstado.clase=this.value; debouncePush(); });
+  $('pTema').addEventListener('input', function(){ pEstado.tema=this.value; debouncePush(); });
+  var pushT=null; function debouncePush(){ clearTimeout(pushT); pushT=setTimeout(pushPregState,400); }
+  Array.prototype.forEach.call($('segModo').children, function(b){ b.addEventListener('click', function(){ Array.prototype.forEach.call($('segModo').children,function(x){x.classList.remove('on');}); b.classList.add('on'); pEstado.modo=b.getAttribute('data-m'); pushPregState(); }); });
+  Array.prototype.forEach.call($('segPantalla').children, function(b){ b.addEventListener('click', function(){ Array.prototype.forEach.call($('segPantalla').children,function(x){x.classList.remove('on');}); b.classList.add('on'); pEstado.pantalla=b.getAttribute('data-p'); pushPregState(); }); });
+  $('btnVisible').addEventListener('click', function(){ pEstado.visible=!pEstado.visible; $('btnVisible').textContent = pEstado.visible?'Ocultar preguntas':'Mostrar preguntas'; $('btnVisible').classList.toggle('ok', pEstado.visible); pushPregState(); });
+  $('btnQr').addEventListener('click', function(){ pEstado.qr=!pEstado.qr; $('btnQr').textContent='QR: '+(pEstado.qr?'on':'off'); pushPregState(); });
+  $('btnResetPreg').addEventListener('click', function(){
+    if($('btnResetPreg')._armed){ clearTimeout($('btnResetPreg')._t); $('btnResetPreg')._armed=false; req('/reset','POST',{},true).then(function(){ setStatus($('stPreg'),'✓ Preguntas vaciadas.',true); pEstado.floatIdx=[]; pushPregState(); loadPreg(); }); }
+    else { $('btnResetPreg')._armed=true; setStatus($('stPreg'),'Tocá otra vez para confirmar.',false); $('btnResetPreg')._t=setTimeout(function(){ $('btnResetPreg')._armed=false; setStatus($('stPreg'),''); },3000); }
+  });
+  function renderPregState(){
+    $('pClase').value=pEstado.clase||''; $('pTema').value=pEstado.tema||'';
+    Array.prototype.forEach.call($('segModo').children,function(x){ x.classList.toggle('on', x.getAttribute('data-m')===pEstado.modo); });
+    Array.prototype.forEach.call($('segPantalla').children,function(x){ x.classList.toggle('on', x.getAttribute('data-p')===(pEstado.pantalla||'auto')); });
+    $('btnVisible').textContent = pEstado.visible?'Ocultar preguntas':'Mostrar preguntas'; $('btnVisible').classList.toggle('ok', pEstado.visible);
+    $('btnQr').textContent='QR: '+(pEstado.qr?'on':'off');
+    var it=pEstado.interacciones||{}; document.querySelectorAll('[data-int]').forEach(function(c){ c.checked = !!it[c.getAttribute('data-int')]; });
+    var mk=pEstado.marca||{};
+    if(document.activeElement!==$('selInst')) $('selInst').value = (mk.institucion==='custom')?'custom':'ulp';
+    if(document.activeElement!==$('mLogo')) $('mLogo').value = mk.logoUrl||'';
+    if($('selInst').value==='custom'){ if(mk.color && document.activeElement!==$('mColor')) $('mColor').value=mk.color; if(mk.color2 && document.activeElement!==$('mColor2')) $('mColor2').value=mk.color2; }
+    if(document.activeElement!==$('chkMostrarClave')) $('chkMostrarClave').checked=!!pEstado.mostrarClave;
+    aplicarMarca(mk);
+  }
+  // Interacciones (menú del alumno)
+  document.querySelectorAll('[data-int]').forEach(function(c){ c.addEventListener('change', function(){ if(!pEstado.interacciones) pEstado.interacciones={}; pEstado.interacciones[c.getAttribute('data-int')]=c.checked; pushPregState(); }); });
+  function renderPregList(){
+    $('pCount').textContent = pLista.length?('('+pLista.length+')'):'';
+    if(!pLista.length){ $('pList').innerHTML='<p class="lead">Todavía no hay preguntas de alumnos.</p>'; return; }
+    $('pList').innerHTML='';
+    pLista.forEach(function(q,i){
+      var floating = pEstado.floatIdx.indexOf(i)>=0;
+      var item=document.createElement('div'); item.className='qitem'+(floating?' floating':'');
+      item.innerHTML='<div class="qtxt">'+escapeHtml(q.pregunta)+' <span class="qwho">'+(q.alumno?('— '+escapeHtml(q.alumno)):'')+'</span></div>';
+      var bFloat=document.createElement('button'); bFloat.className='btn sm '+(floating?'ok':'dark'); bFloat.textContent=floating?'Flotando':'Flotar';
+      bFloat.addEventListener('click', function(){ var k=pEstado.floatIdx.indexOf(i); if(k>=0) pEstado.floatIdx.splice(k,1); else pEstado.floatIdx.push(i); pushPregState(); renderPregList(); });
+      var bFoco=document.createElement('button'); bFoco.className='btn sm dark'; bFoco.textContent='Foco'; bFoco.title='Destacar esta';
+      bFoco.addEventListener('click', function(){ pEstado.modo='foco'; pEstado.index=i; pEstado.visible=true; pushPregState(); renderPregState(); });
+      var bDel=document.createElement('button'); bDel.className='x'; bDel.textContent='🗑'; bDel.title='Borrar';
+      bDel.addEventListener('click', function(){ if(bDel._armed){ req('/delete','POST',{ts:q.ts,pregunta:q.pregunta},true).then(function(){ loadPreg(); }); } else { bDel._armed=true; bDel.textContent='⚠'; setTimeout(function(){ bDel._armed=false; bDel.textContent='🗑'; },2500); } });
+      item.appendChild(bFloat); item.appendChild(bFoco); item.appendChild(bDel);
+      $('pList').appendChild(item);
+    });
+  }
+  function loadPreg(){ if(!op.worker) return; req('/list').then(function(r){ if(r&&r.ok){ pLista=r.preguntas||[]; renderPregList(); } }); req('/state').then(function(r){ if(r&&r.ok){ pEstado=r.estado; renderPregState(); renderPregList(); } }); }
+  var pregTimer=null; function arrancarPreg(){ if(pregTimer) return; loadPreg(); pregTimer=setInterval(loadPreg,4000); }
+
+  /* ==================== ENCUESTA / TERMÓMETRO / TEMPORIZADOR ==================== */
+  function votEstado(tipo, patch){ return req('/votacion?tipo='+tipo, 'POST', {estado:patch}, true); }
+  function renderVotBars(container, data){
+    var e=(data&&data.estado)||{}, conteo=(data&&data.conteo)||[], total=(data&&data.total)||0;
+    if(!e.opciones||!e.opciones.length){ container.innerHTML='<p class="lead">Sin opciones cargadas todavía.</p>'; return; }
+    container.innerHTML='<div class="curpreg">'+escapeHtml(e.pregunta||'')+(e.abierta?' · <span style="color:#7ee6a8">abierta</span>':' · cerrada')+'</div>'
+      + e.opciones.map(function(txt,i){ var cnt=conteo[i]||0, pct=total>0?Math.round(cnt*100/total):0; var col=['var(--a)','var(--b)','var(--c)','var(--d)','var(--e)','var(--f)'][i]; return '<div class="resbar"><div class="top"><span>'+LETRAS[i]+'. '+escapeHtml(txt)+'</span><span>'+pct+'% ('+cnt+')</span></div><div class="track"><div class="fill" style="width:'+pct+'%;background:'+col+'"></div></div></div>'; }).join('')
+      + '<div class="tot" style="margin-top:6px">'+(total===1?'1 respuesta':total+' respuestas')+'</div>';
+  }
+  // Encuesta
+  $('btnEncAbrir').addEventListener('click', function(){
+    var pregunta=$('encPregunta').value.trim();
+    var opciones=$('encOpciones').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    if(opciones.length<2){ setStatus($('stEnc'),'Poné al menos 2 opciones (una por línea).',false); return; }
+    votEstado('encuesta',{pregunta:pregunta,opciones:opciones,abierta:true}).then(function(r){ setStatus($('stEnc'), r&&r.ok?'✓ Encuesta abierta.':(r&&r.error||'No se pudo.'), r&&r.ok); });
+  });
+  $('btnEncCerrar').addEventListener('click', function(){ req('/votacion?tipo=encuesta').then(function(r){ var e=(r&&r.estado)||{}; votEstado('encuesta',{pregunta:e.pregunta,opciones:e.opciones,abierta:false}).then(function(){ setStatus($('stEnc'),'Encuesta cerrada.',true); }); }); });
+  $('btnEncReset').addEventListener('click', function(){ req('/votacion/reset?tipo=encuesta','POST',{},true).then(function(){ setStatus($('stEnc'),'✓ Votos vaciados.',true); }); });
+  // Medidores (velocímetros): opciones FIJAS de 5 niveles por tipo
+  var MED_OPC = {
+    velocidad:{ pregunta:'¿Cómo es el ritmo del profe?', opciones:['Muy lento','Lento','Ritmo justo','Rápido','Muy rápido'] },
+    termometro:{ pregunta:'¿Se entiende el tema?', opciones:['Perdido','Me cuesta','Más o menos','Bien','Todo claro'] }
+  };
+  function medAbrir(tipo, st){ var o=MED_OPC[tipo]; votEstado(tipo,{pregunta:o.pregunta,opciones:o.opciones,abierta:true}).then(function(r){ setStatus($(st), r&&r.ok?'✓ Abierto (se ve abajo en el alumno).':(r&&r.error||'No se pudo.'), r&&r.ok); }); }
+  function medCerrar(tipo, st){ req('/votacion?tipo='+tipo).then(function(r){ var e=(r&&r.estado)||{}; votEstado(tipo,{pregunta:e.pregunta||MED_OPC[tipo].pregunta,opciones:(e.opciones&&e.opciones.length?e.opciones:MED_OPC[tipo].opciones),abierta:false}).then(function(){ setStatus($(st),'Cerrado.',true); }); }); }
+  $('btnVelAbrir').addEventListener('click', function(){ medAbrir('velocidad','stVel'); });
+  $('btnVelCerrar').addEventListener('click', function(){ medCerrar('velocidad','stVel'); });
+  $('btnVelReset').addEventListener('click', function(){ req('/votacion/reset?tipo=velocidad','POST',{},true).then(function(){ setStatus($('stVel'),'✓ Vaciado.',true); }); });
+  $('btnTerAbrir').addEventListener('click', function(){ medAbrir('termometro','stTer'); });
+  $('btnTerCerrar').addEventListener('click', function(){ medCerrar('termometro','stTer'); });
+  $('btnTerReset').addEventListener('click', function(){ req('/votacion/reset?tipo=termometro','POST',{},true).then(function(){ setStatus($('stTer'),'✓ Vaciado.',true); }); });
+  // Temporizador
+  $('btnTemIniciar').addEventListener('click', function(){ var m=parseInt($('temMin').value||'0',10)||0, s=parseInt($('temSeg').value||'0',10)||0; var dur=(m*60+s)*1000; if(dur<=0){ setStatus($('stTem'),'Poné una duración.',false); return; } req('/temporizador','POST',{estado:{activo:true, fin:Date.now()+dur, etiqueta:$('temEtiqueta').value.trim()}},true).then(function(r){ setStatus($('stTem'), r&&r.ok?'✓ Iniciado.':'No se pudo.', r&&r.ok); }); });
+  $('btnTemParar').addEventListener('click', function(){ req('/temporizador','POST',{estado:{activo:false,fin:0,etiqueta:''}},true).then(function(){ setStatus($('stTem'),'Detenido.',true); }); });
+  // polling de resultados de la solapa activa
+  var votTimer=null;
+  function arrancarVot(){ if(votTimer) return; function tick(){ if(!op.worker) return; if(!$('secEnc').classList.contains('hidden')) req('/votacion?tipo=encuesta').then(function(d){ if(d&&d.ok) renderVotBars($('encRes'), d); }); if(!$('secTer').classList.contains('hidden')){ req('/votacion?tipo=velocidad').then(function(d){ if(d&&d.ok) renderVotBars($('velRes'), d); }); req('/votacion?tipo=termometro').then(function(d){ if(d&&d.ok) renderVotBars($('terRes'), d); }); } } tick(); votTimer=setInterval(tick,2000); }
+
+  /* ---------- ALUMNOS CONECTADOS (quién abrió el portal del alumno) ---------- */
+  if($('conHead')) $('conHead').addEventListener('click', function(){ $('conectados').classList.toggle('collapsed'); });
+  function renderConectados(data){
+    var box=$('conectados'), num=$('conNum'), list=$('conList');
+    var alumnos=(data&&data.alumnos)||[], total=(data&&typeof data.total==='number')?data.total:alumnos.length;
+    box.classList.remove('hidden'); num.textContent=total;
+    if(!alumnos.length){ list.innerHTML='<div class="cempty">Nadie conectado todavía.</div>'; return; }
+    list.innerHTML=alumnos.map(function(a){
+      var n=(a.nombre||'').trim();
+      return n ? '<div class="citem"><span class="ci-dot"></span>'+escapeHtml(n)+'</div>'
+               : '<div class="citem anon"><span class="ci-dot"></span>Anónimo</div>';
+    }).join('');
+  }
+  var presTimer=null;
+  function arrancarPresencia(){ if(presTimer) return; function tick(){ if(!op.worker) return; req('/presence','GET',null,true).then(function(d){ if(d&&d.ok) renderConectados(d); }); } tick(); presTimer=setInterval(tick,5000); }
+
+  renderEditor();
+  if (op.worker) conectar();
+})();
+</script>
+</body>
+</html>

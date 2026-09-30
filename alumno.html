@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clase en vivo — ULP</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     Enlace ÚNICO del alumno.
+     - Contenido centrado (ficha central).
+     - RAIL LATERAL como SOLAPAS de fichero (interacciones habilitadas).
+     - Iconos planos (SVG line), sin emojis 3D.
+     - Barra inferior fija con MEDIDORES tipo velocímetro:
+         · Ritmo del profe (velocidad)  · ¿Se entiende? (comprensión)
+       El operador habilita 1, los 2 o ninguno.
+     >>> CONFIGURÁ WORKER_URL abajo, o pasá ?api=... en la URL. <<<
+     ============================================================ */
+  :root{
+    --naranja:#f6a01a; --naranja-2:#ffb648; --naranja-d:#e08800;
+    --bg-1:#0c1626; --bg-2:#0a1120; --ink:#fff; --ink-soft:#aebacb;
+    --panel:#111e33; --panel-soft:rgba(255,255,255,.05); --card-border:rgba(255,255,255,.13);
+    --ok:#3cc878; --warn:#e0a92a; --bad:#e0563a;
+    --a:#f6a01a; --b:#e0563a; --c:#2f9e77; --d:#3b74d6; --e:#8b5cf6; --f:#d94f9c;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ min-height:100%; }
+  body{
+    font-family:'Poppins',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink);
+    background:
+      radial-gradient(900px 600px at 85% -10%, rgba(246,160,26,.16), transparent 60%),
+      radial-gradient(700px 600px at 0% 110%, rgba(246,160,26,.08), transparent 55%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    min-height:100vh; display:flex; padding:16px;
+  }
+  /* el panel de medidores flota sobre el lateral derecho (se puede solapar/plegar), no empuja el contenido */
+  body.hasgauge{ padding-bottom:16px; }
+  svg.i{ width:22px; height:22px; display:block; }
+
+  /* margin:auto centra en ambos ejes SIN recortar cuando el contenido es más alto que la ventana */
+  .app{ width:100%; max-width:700px; margin:auto; display:flex; align-items:stretch; }
+
+  /* ---- RAIL de SOLAPAS (fichero) ---- */
+  .rail{ flex:0 0 90px; display:flex; flex-direction:column; gap:7px; padding:26px 0; }
+  .rail button{
+    position:relative; display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding:13px 6px; margin-right:-1px; cursor:pointer;
+    border:1px solid var(--card-border); border-right-color:transparent;
+    border-radius:16px 0 0 16px;
+    background:var(--panel-soft); color:var(--ink-soft);
+    font:600 .70rem/1.1 inherit; text-align:center; transition:background .15s,color .15s;
+  }
+  .rail button:hover{ background:rgba(255,255,255,.09); color:var(--ink); }
+  .rail button.on{
+    background:var(--panel); color:var(--naranja-2); border-color:var(--card-border);
+    border-right-color:var(--panel); box-shadow:-4px 0 14px rgba(0,0,0,.28); z-index:2;
+  }
+  .rail button .dot{ display:none; position:absolute; top:8px; right:10px; width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px rgba(60,200,120,.28); }
+  .rail button.vivo .dot{ display:block; animation:pulse 1.2s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .content{ flex:1; min-width:0; background:var(--panel); border:1px solid var(--card-border); border-radius:20px; padding:20px 18px 16px; box-shadow:0 30px 70px rgba(0,0,0,.45); }
+  .brand{ display:flex; align-items:center; gap:11px; margin-bottom:12px; }
+  .brand img{ height:34px; width:auto; display:block; } .brand .t{ font-size:.78rem; font-weight:700; color:var(--naranja-2); text-transform:uppercase; letter-spacing:.05em; }
+
+  label{ font-size:.78rem; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:6px; }
+  input,textarea{ width:100%; padding:12px 13px; border-radius:12px; background:#0e1a2c; border:1px solid rgba(255,255,255,.16); color:#fff; font-family:inherit; font-size:1rem; font-weight:500; resize:vertical; }
+  input:focus,textarea:focus{ outline:none; border-color:var(--naranja); box-shadow:0 0 0 3px rgba(246,160,26,.2); }
+  textarea{ min-height:110px; }
+  .counter{ text-align:right; font-size:.78rem; color:var(--ink-soft); margin-top:4px; }
+  button.big{ width:100%; padding:13px; border:none; border-radius:12px; cursor:pointer; font-family:inherit; font-size:1rem; font-weight:800; color:#1a1204; background:linear-gradient(160deg,var(--naranja),#e08800); transition:.15s; }
+  button.big:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.06); } button.big:disabled{ opacity:.6; cursor:default; }
+  .msg{ font-size:.95rem; font-weight:600; padding:12px 14px; border-radius:10px; display:none; margin-top:14px; } .msg.show{ display:block; }
+  .msg.ok{ background:rgba(60,200,120,.14); color:#7ee6a8; } .msg.err{ background:rgba(240,80,80,.14); color:#ff9d9d; }
+  .hidden{ display:none !important; }
+  .espera{ text-align:center; padding:26px 10px; } .espera .ico{ width:52px; height:52px; margin:0 auto 12px; color:var(--ink-soft); opacity:.85; } .espera .ico svg{ width:52px; height:52px; } .espera h2{ font-size:1.3rem; font-weight:800; margin-bottom:6px; } .espera p{ color:var(--ink-soft); }
+  .dots::after{ content:''; animation:dots 1.4s steps(4,end) infinite; } @keyframes dots{ 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+
+  /* opciones (quiz / encuesta) */
+  .pregNum{ font-size:.8rem; font-weight:700; color:var(--ink-soft); margin:6px 0 4px; }
+  .pregTxt{ font-size:1.25rem; font-weight:800; line-height:1.2; margin-bottom:14px; }
+  .opts{ display:flex; flex-direction:column; gap:10px; }
+  .opt{ display:flex; align-items:center; gap:12px; width:100%; padding:13px; border-radius:14px; cursor:pointer; text-align:left; background:#0e1a2c; border:2px solid rgba(255,255,255,.14); color:#fff; font-family:inherit; font-size:1rem; font-weight:600; transition:.1s; position:relative; overflow:hidden; }
+  .opt:hover:not(:disabled){ transform:translateY(-1px); border-color:var(--naranja); } .opt:disabled{ cursor:default; opacity:.9; }
+  .opt .badge{ flex:none; width:33px; height:33px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-weight:800; color:#12100a; }
+  .opt.sel{ border-color:var(--naranja); background:rgba(246,160,26,.14); }
+  .opt.o0 .badge{background:var(--a)} .opt.o1 .badge{background:var(--b)} .opt.o2 .badge{background:var(--c)} .opt.o3 .badge{background:var(--d)} .opt.o4 .badge{background:var(--e)} .opt.o5 .badge{background:var(--f)}
+  .opt .bar{ position:absolute; left:0; top:0; bottom:0; width:0; opacity:.18; background:var(--naranja); transition:width .4s; } .opt .pct{ margin-left:auto; font-weight:800; z-index:1; }
+  .opt > *{ position:relative; z-index:1; }
+
+  .respondido{ text-align:center; padding:22px 10px; }
+  .respondido .check,.done .check{ width:70px; height:70px; margin:2px auto 12px; border-radius:50%; background:rgba(60,200,120,.16); display:flex; align-items:center; justify-content:center; } .respondido .check svg,.done .check svg{ width:36px; height:36px; }
+  .respondido h2{ font-size:1.35rem; font-weight:800; margin-bottom:6px; } .respondido p{ color:var(--ink-soft); } .respondido .elegida{ margin-top:10px; font-weight:700; color:var(--naranja-2); }
+  .done{ text-align:center; } .done h2{ font-size:1.4rem; font-weight:800; margin-bottom:8px; } .done p{ color:var(--ink-soft); margin-bottom:18px; }
+
+  /* temporizador */
+  .tempo{ text-align:center; padding:20px 10px; } .tempo .lbl{ font-size:1.05rem; color:var(--ink-soft); font-weight:600; margin-bottom:8px; } .tempo .clock{ font-size:4.2rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:.02em; } .tempo.fin .clock{ color:var(--bad); }
+
+  .foot{ margin-top:16px; text-align:center; color:var(--ink-soft); font-size:.75rem; }
+
+  /* ---- PANEL de MEDIDORES (velocímetros) en el LATERAL DERECHO, plegable/solapable ---- */
+  .gaugebar{ position:fixed; top:0; right:0; z-index:60; height:100vh; width:288px;
+    display:flex; flex-direction:column; gap:14px; overflow-y:auto;
+    background:linear-gradient(180deg, rgba(10,17,30,.97), rgba(8,13,22,.97));
+    border-left:1px solid var(--card-border); backdrop-filter:blur(10px);
+    padding:16px 14px calc(16px + env(safe-area-inset-bottom)) 42px;
+    box-shadow:-16px 0 40px rgba(0,0,0,.35);
+    transition:transform .28s cubic-bezier(.22,1,.36,1); }
+  .gaugebar.collapsed{ transform:translateX(calc(100% - 34px)); }
+  .gaugebar .ghandle{ position:absolute; left:0; top:0; bottom:0; width:34px; padding:0;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    border:none; border-right:1px solid var(--card-border); background:rgba(255,255,255,.05); color:var(--ink-soft); }
+  .gaugebar .ghandle:hover{ color:var(--naranja-2); background:rgba(255,255,255,.09); }
+  .gaugebar .ghandle svg{ width:18px; height:18px; transition:transform .28s; }
+  .gaugebar.collapsed .ghandle svg{ transform:rotate(180deg); }
+  .gaugebar .gbhead{ font:800 .74rem inherit; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; text-align:center; }
+  .gauge{ width:100%; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .gauge:last-child{ border-bottom:none; padding-bottom:0; }
+  .gauge .gtitle{ display:flex; align-items:center; justify-content:center; gap:7px; font:700 .72rem inherit; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; margin-bottom:0; }
+  .gauge .gtitle svg{ width:15px; height:15px; }
+  .gsvg{ display:block; margin:-6px auto 0; width:158px; height:auto; }
+  .gsvg [data-needle]{ transition:transform .5s cubic-bezier(.22,1,.36,1); }
+  .gcap{ text-align:center; font:600 .74rem inherit; color:var(--ink); margin:2px 0 8px; min-height:1.1em; }
+  .glevels{ display:flex; gap:5px; }
+  /* altura fija => TODOS los botones de AMBOS velocímetros tienen el mismo tamaño */
+  .glevels button{ flex:1 1 0; min-width:0; height:46px; display:flex; align-items:center; justify-content:center; text-align:center;
+    border:1px solid var(--card-border); background:var(--panel-soft); color:var(--ink-soft);
+    border-radius:9px; padding:4px 2px; font:600 .60rem/1.05 inherit; cursor:pointer; white-space:pre-line; transition:.12s; }
+  .glevels button:hover{ color:var(--ink); border-color:var(--naranja); }
+  .glevels button.mine{ border-color:var(--naranja); color:#fff; background:rgba(246,160,26,.18); box-shadow:0 0 0 2px rgba(246,160,26,.15) inset; }
+
+  @media (max-width:560px){
+    .rail{ flex-basis:70px; } .rail button{ font-size:.62rem; padding:11px 3px; } .rail button svg.i{ width:20px; height:20px; }
+    .content{ padding:16px 13px; }
+    .gaugebar{ width:min(84vw,300px); }
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail" id="rail"></aside>
+    <main class="content">
+      <div class="brand"><img src="ulp_header.svg" alt="ULP" onerror="this.style.display='none'"><span class="t" id="brandT">Clase en vivo</span></div>
+
+      <div class="hidden" id="claveBox" style="margin-bottom:14px">
+        <label for="claveInput">Clave de la clase</label>
+        <input id="claveInput" type="text" maxlength="40" placeholder="Ingresá la clave que te pasó el profe" autocomplete="off">
+        <div class="msg err" id="claveMsg" style="margin-top:8px">Clave incorrecta.</div>
+      </div>
+      <div id="nombreBox" style="margin-bottom:14px">
+        <label for="nombre">Tu nombre <span style="text-transform:none;color:var(--ink-soft);font-weight:500">(opcional)</span></label>
+        <input id="nombre" type="text" maxlength="60" placeholder="Ej: Sofía M." autocomplete="off">
+      </div>
+
+      <!-- ===== PREGUNTAS ===== -->
+      <section data-sec="preguntas" class="hidden">
+        <div id="pForm">
+          <p style="color:var(--ink-soft); margin-bottom:14px; font-size:.98rem">Escribile una pregunta al profe. Se la mostramos durante la clase.</p>
+          <label for="pTexto">Tu pregunta</label>
+          <textarea id="pTexto" maxlength="400" placeholder="Escribí tu pregunta acá…"></textarea>
+          <div class="counter"><span id="pCount">0</span>/400</div>
+          <div class="msg err" id="pMsg"></div>
+          <button class="big" id="pBtn" style="margin-top:8px">Enviar pregunta</button>
+        </div>
+        <div id="pDone" class="done hidden">
+          <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#7ee6a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <h2>¡Pregunta enviada!</h2><p>Gracias. Si querés, dejá otra.</p>
+          <button class="big" id="pOtra" style="color:#fff;background:#1c2b44">Hacer otra pregunta</button>
+        </div>
+      </section>
+
+      <!-- ===== CUESTIONARIO ===== -->
+      <section data-sec="cuestionario" class="hidden">
+        <div class="espera" id="qEspera"><div class="ico" id="qIco"></div><h2 id="qEsperaH">Preparando la próxima pregunta</h2><p class="dots" id="qEsperaP">Esperá a que el profe abra una pregunta</p></div>
+        <div id="qPreg" class="hidden"><div class="pregNum" id="qNum"></div><div class="pregTxt" id="qTxt"></div><div class="opts" id="qOpts"></div><div class="msg err" id="qMsg"></div></div>
+        <div id="qOk" class="respondido hidden"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#7ee6a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><h2>¡Respuesta enviada!</h2><p>Esperá el resultado en la pantalla.</p><div class="elegida" id="qElegida"></div></div>
+      </section>
+
+      <!-- ===== ENCUESTA ===== -->
+      <section data-sec="encuesta" class="hidden">
+        <div class="espera" id="encEspera"><div class="ico" data-ico="bars"></div><h2>Todavía no hay encuesta</h2><p class="dots">Esperá a que el profe la abra</p></div>
+        <div id="encPreg" class="hidden"><div class="pregTxt" id="encTxt"></div><div class="opts" id="encOpts"></div><div class="msg err" id="encMsg"></div></div>
+      </section>
+
+      <!-- ===== TEMPORIZADOR ===== -->
+      <section data-sec="temporizador" class="hidden">
+        <div class="tempo" id="tempoWrap"><div class="lbl" id="tempoLbl">Sin temporizador activo</div><div class="clock" id="tempoClock">—</div></div>
+      </section>
+
+      <div class="foot">Universidad de La Punta</div>
+    </main>
+  </div>
+
+  <!-- MEDIDORES en el lateral derecho, plegables (se llena por JS si el profe los habilita) -->
+  <aside class="gaugebar hidden" id="gaugebar">
+    <button class="ghandle" id="gaugeHandle" type="button" aria-label="Mostrar u ocultar los medidores">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="gbhead">¿Cómo lo sentís?</div>
+  </aside>
+
+<script>
+  /* >>> URL del Worker combinado (o ?api=... en la URL) <<< */
+  var WORKER_URL = "";
+
+  (function(){
+    var params = new URLSearchParams(location.search);
+    var api = (params.get('api') || params.get('worker') || WORKER_URL || '').replace(/\/+$/,'');
+    var clase = (params.get('clase')||'').trim();
+    var clave = (params.get('clave')||'').trim();
+    function qp(p){ var q=[]; if(clase) q.push('clase='+encodeURIComponent(clase)); if(clave) q.push('clave='+encodeURIComponent(clave)); if(!q.length) return p; return p + (p.indexOf('?')>=0?'&':'?') + q.join('&'); }
+    function F(p,o){ return fetch(api+qp(p), o); }
+    function aplicarMarca(m){ m=m||{}; try{ var r=document.documentElement.style; r.setProperty('--naranja',m.color||'#f6a01a'); r.setProperty('--naranja-2',m.color2||m.color||'#ffb648'); r.setProperty('--naranja-d',m.color2||m.color||'#e08800'); var logo=m.logoUrl||'ulp_header.svg'; document.querySelectorAll('.brand img').forEach(function(im){ if(im.getAttribute('src')!==logo) im.setAttribute('src',logo); im.style.display=''; }); }catch(e){} }
+    var LETRAS = ['A','B','C','D','E','F'];
+    function $(id){ return document.getElementById(id); }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+    function nombre(){ return ($('nombre').value||'').trim(); }
+
+    /* ---------- iconos planos (SVG line) ---------- */
+    function svg(inner,extra){ return '<svg class="i'+(extra?(' '+extra):'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+inner+'</svg>'; }
+    var ICON = {
+      preguntas: svg('<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+      cuestionario: svg('<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="m8.5 12 2.4 2.4L16 9.2"/>'),
+      encuesta: svg('<path d="M6 20V11M12 20V4M18 20v-6"/>'),
+      temporizador: svg('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9"/><path d="M9.5 2.5h5"/>'),
+      gauge: svg('<path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4.4-3.8"/><circle cx="12" cy="16" r="1.3" fill="currentColor"/>'),
+      clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>'),
+      coffee: svg('<path d="M4 9h13v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M17 10h2.2a2.2 2.2 0 0 1 0 4.4H17"/><path d="M7 3v2M11 3v2"/>'),
+      screen: svg('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+      bars: svg('<path d="M6 20V11M12 20V4M18 20v-6"/>')
+    };
+    function setIco(el, name){ if(el) el.innerHTML = ICON[name]||''; }
+    // iconos estáticos de espera
+    document.querySelectorAll('[data-ico]').forEach(function(el){ setIco(el, el.getAttribute('data-ico')); });
+
+    // sessionId persistente (para votación/medidores: cambiar el propio voto)
+    var sid; try{ sid=localStorage.getItem('ulp_sid'); if(!sid){ sid='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem('ulp_sid',sid); } }catch(e){ sid='s'+Math.random().toString(36).slice(2,10); }
+    try { $('nombre').value = localStorage.getItem('ulp_clase_nombre') || ''; } catch(e){}
+    $('nombre').addEventListener('input', function(){ try { localStorage.setItem('ulp_clase_nombre', nombre()); } catch(e){} });
+    $('claveInput').value = clave;
+    $('claveInput').addEventListener('input', function(){ clave = this.value.trim(); $('claveMsg').classList.remove('show'); });
+    function claveError(d){ if(d && !d.ok && d.error && d.error.indexOf('Clave')>=0){ $('claveBox').classList.remove('hidden'); $('claveMsg').classList.add('show'); return true; } return false; }
+
+    if (!api){ $('rail').innerHTML='<div style="color:var(--ink-soft);font-size:.8rem;padding:10px">Falta la URL del Worker</div>'; return; }
+
+    /* ---------- RAIL / secciones (solapas) ---------- */
+    var META = {
+      preguntas:   { ic:'preguntas',    label:'Preguntas' },
+      cuestionario:{ ic:'cuestionario', label:'Cuestionario' },
+      encuesta:    { ic:'encuesta',     label:'Encuesta' },
+      temporizador:{ ic:'temporizador', label:'Tiempo' }
+    };
+    var ORDEN = ['preguntas','cuestionario','encuesta','temporizador']; // solapas (los medidores van abajo)
+    var activos = ['preguntas','cuestionario'];
+    var interAll = {}; // todas las interacciones (incluye medidores velocidad/termometro)
+    var secActual = null;
+    function showSec(id){
+      secActual=id;
+      document.querySelectorAll('main section[data-sec]').forEach(function(s){ s.classList.toggle('hidden', s.getAttribute('data-sec')!==id); });
+      Array.prototype.forEach.call($('rail').children, function(b){ b.classList.toggle('on', b.getAttribute('data-id')===id); });
+      $('nombreBox').classList.toggle('hidden', !(id==='preguntas'||id==='cuestionario'));
+    }
+    function renderRail(){
+      var lista = ORDEN.filter(function(id){ return activos.indexOf(id)>=0; });
+      $('rail').innerHTML='';
+      lista.forEach(function(id){
+        var b=document.createElement('button'); b.setAttribute('data-id',id);
+        b.innerHTML=ICON[META[id].ic]+'<span>'+META[id].label+'</span><span class="dot"></span>';
+        b.addEventListener('click', function(){ showSec(id); });
+        $('rail').appendChild(b);
+      });
+      if(!secActual || lista.indexOf(secActual)<0) showSec(lista[0]||'preguntas');
+      else showSec(secActual);
+    }
+    function setDot(id, on){ var b=$('rail').querySelector('[data-id="'+id+'"]'); if(b) b.classList.toggle('vivo', !!on); }
+
+    /* ---------- PREGUNTAS ---------- */
+    $('pTexto').addEventListener('input', function(){ $('pCount').textContent=this.value.length; });
+    $('pBtn').addEventListener('click', function(){
+      var texto=($('pTexto').value||'').trim(); $('pMsg').classList.remove('show');
+      if(texto.length<3){ $('pMsg').textContent='Escribí una pregunta un poco más larga.'; $('pMsg').classList.add('show'); return; }
+      $('pBtn').disabled=true; $('pBtn').textContent='Enviando…';
+      F('/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alumno:nombre(),pregunta:texto})})
+      .then(function(r){return r.json().catch(function(){return{ok:false,error:'Respuesta inválida.'};});})
+      .then(function(d){ if(d&&d.ok){ $('pForm').classList.add('hidden'); $('pDone').classList.remove('hidden'); } else { if(!claveError(d)){ $('pMsg').textContent=(d&&d.error)||'No se pudo enviar.'; $('pMsg').classList.add('show'); } $('pBtn').disabled=false; $('pBtn').textContent='Enviar pregunta'; } })
+      .catch(function(err){ $('pMsg').textContent='Error de conexión: '+err.message; $('pMsg').classList.add('show'); $('pBtn').disabled=false; $('pBtn').textContent='Enviar pregunta'; });
+    });
+    $('pOtra').addEventListener('click', function(){ $('pTexto').value=''; $('pCount').textContent='0'; $('pMsg').classList.remove('show'); $('pBtn').disabled=false; $('pBtn').textContent='Enviar pregunta'; $('pDone').classList.add('hidden'); $('pForm').classList.remove('hidden'); $('pTexto').focus(); });
+
+    /* ---------- CUESTIONARIO ---------- */
+    var def={titulo:'',preguntas:[]}, answered={}, sending=false, libreMode=false, loadedForm='default';
+    function showQuiz(node){ [$('qEspera'),$('qPreg'),$('qOk')].forEach(function(n){ n.classList.add('hidden'); }); node.classList.remove('hidden'); }
+    function getDef(form){ form=form||loadedForm||'default'; return F('/quiz/def?form='+encodeURIComponent(form)).then(function(r){return r.json();}).then(function(d){ if(d&&d.ok){ def=d.def||def; loadedForm=form; if(def.titulo) $('brandT').textContent=def.titulo; } }).catch(function(){}); }
+    function proxNoRespondida(){ for(var i=0;i<def.preguntas.length;i++){ if(!(i in answered)) return i; } return -1; }
+    function renderLibre(){
+      if(!def.preguntas||!def.preguntas.length){ setIco($('qIco'),'clock'); $('qEsperaH').textContent='Cargando cuestionario…'; $('qEsperaP').classList.remove('dots'); $('qEsperaP').textContent=''; showQuiz($('qEspera')); return; }
+      var next=proxNoRespondida();
+      if(next<0){ document.querySelector('#qOk h2').textContent='¡Terminaste el cuestionario!'; document.querySelector('#qOk p').textContent='Gracias por participar.'; $('qElegida').textContent='Respondiste '+Object.keys(answered).length+' de '+def.preguntas.length+'.'; showQuiz($('qOk')); return; }
+      renderPregunta(next);
+    }
+    function renderPregunta(index){
+      var p=def.preguntas[index]; if(!p){ showQuiz($('qEspera')); return; }
+      if(index in answered){ var o=answered[index]; $('qElegida').textContent='Elegiste: '+LETRAS[o]+'. '+(p.opciones[o]||''); showQuiz($('qOk')); return; }
+      $('qNum').textContent='Pregunta '+(index+1)+' de '+def.preguntas.length; $('qTxt').textContent=p.q; $('qOpts').innerHTML='';
+      p.opciones.forEach(function(txt,i){ var b=document.createElement('button'); b.className='opt o'+i; b.innerHTML='<span class="badge">'+LETRAS[i]+'</span><span>'+escapeHtml(txt)+'</span>'; b.addEventListener('click', function(){ responder(index,i,b); }); $('qOpts').appendChild(b); });
+      $('qMsg').classList.remove('show'); showQuiz($('qPreg'));
+    }
+    function responder(index,opcion,btn){
+      if(sending) return; sending=true; $('qMsg').classList.remove('show');
+      Array.prototype.forEach.call($('qOpts').children,function(c){c.disabled=true;}); btn.classList.add('sel');
+      F('/quiz/responder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:index,opcion:opcion,alumno:nombre()})})
+      .then(function(r){return r.json().catch(function(){return{ok:false,error:'Respuesta inválida.'};});})
+      .then(function(d){ sending=false;
+        if(d&&d.ok){ answered[index]=opcion; if(libreMode) renderLibre(); else renderPregunta(index); }
+        else { if(!claveError(d)){ $('qMsg').textContent=(d&&d.error)||'No se pudo enviar.'; $('qMsg').classList.add('show'); } Array.prototype.forEach.call($('qOpts').children,function(c){c.disabled=false;}); btn.classList.remove('sel'); }
+      }).catch(function(err){ sending=false; $('qMsg').textContent='Error de conexión: '+err.message; $('qMsg').classList.add('show'); Array.prototype.forEach.call($('qOpts').children,function(c){c.disabled=false;}); btn.classList.remove('sel'); });
+    }
+    function applyQuiz(estado){
+      if(estado && estado.form && estado.form!==loadedForm){ answered={}; getDef(estado.form); }
+      libreMode = !!(estado && estado.activo && estado.libre);
+      var vivo = estado && estado.activo && (estado.libre || estado.fase==='abierta');
+      setDot('cuestionario', !!vivo);
+      if(secActual!=='cuestionario') return;
+      if(!estado || !estado.activo){ setIco($('qIco'),'coffee'); $('qEsperaH').textContent='El cuestionario todavía no empezó'; $('qEsperaP').classList.remove('dots'); $('qEsperaP').textContent='Elegí otra opción del menú mientras tanto.'; showQuiz($('qEspera')); return; }
+      if(estado.libre){ renderLibre(); return; }
+      if(estado.fase==='abierta'){ renderPregunta(estado.index); }
+      else { setIco($('qIco'), estado.fase==='lobby'?'clock':'screen'); $('qEsperaH').textContent = estado.fase==='lobby' ? 'Preparando la próxima pregunta' : 'Mirá el resultado en la pantalla'; $('qEsperaP').classList.toggle('dots', estado.fase==='lobby'); $('qEsperaP').textContent = estado.fase==='lobby' ? 'Esperá a que el profe abra una pregunta' : 'La próxima ya viene';
+        if((estado.index in answered) && (estado.fase==='cerrada'||estado.fase==='revelada')){ var p=def.preguntas[estado.index]; if(p){ $('qElegida').textContent='Elegiste: '+LETRAS[answered[estado.index]]+'. '+(p.opciones[answered[estado.index]]||''); showQuiz($('qOk')); return; } }
+        showQuiz($('qEspera')); }
+    }
+
+    /* ---------- VOTOS (encuesta + medidores) ---------- */
+    var votadoLocal = {}; // {tipo: opcionElegida}
+    try { votadoLocal = JSON.parse(localStorage.getItem('ulp_votos')||'{}'); } catch(e){}
+    function saveVoto(tipo,o){ votadoLocal[tipo]=o; try{ localStorage.setItem('ulp_votos', JSON.stringify(votadoLocal)); }catch(e){} }
+    function votar(tipo,opcion){
+      saveVoto(tipo,opcion);
+      if(tipo==='encuesta'){ var opts=$('encOpts'); if(opts) Array.prototype.forEach.call(opts.children,function(b,i){ b.classList.toggle('sel', i===opcion); }); }
+      else { renderGauges(); }
+      F('/votacion/votar?tipo='+tipo,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sid,opcion:opcion})}).then(function(r){return r.json();}).then(function(d){ claveError(d); }).catch(function(){});
+    }
+    // Encuesta (barras clásicas)
+    function renderEncuesta(cfg){
+      var e = cfg && cfg.estado;
+      if(!e || !e.abierta || !e.opciones || !e.opciones.length){ $('encPreg').classList.add('hidden'); $('encEspera').classList.remove('hidden'); return; }
+      $('encEspera').classList.add('hidden'); $('encPreg').classList.remove('hidden');
+      if(e.pregunta) $('encTxt').textContent=e.pregunta;
+      var total=cfg.total||0, conteo=cfg.conteo||[], elegida=('encuesta' in votadoLocal)?votadoLocal.encuesta:-1;
+      var opts=$('encOpts'), key='encuesta|'+e.opciones.join('|');
+      if(opts.getAttribute('data-key')!==key){
+        opts.setAttribute('data-key',key); opts.innerHTML='';
+        e.opciones.forEach(function(t,i){ var b=document.createElement('button'); b.className='opt o'+i; b.setAttribute('data-i',i);
+          b.innerHTML='<span class="bar" data-bar></span><span class="badge">'+LETRAS[i]+'</span><span>'+escapeHtml(t)+'</span><span class="pct" data-pct></span>';
+          b.addEventListener('click', function(){ votar('encuesta',i); }); opts.appendChild(b); });
+      }
+      Array.prototype.forEach.call(opts.children, function(b,i){
+        var cnt=conteo[i]||0, pct=total>0?Math.round(cnt*100/total):0;
+        b.querySelector('[data-bar]').style.width=pct+'%'; b.querySelector('[data-pct]').textContent=pct+'%';
+        b.classList.toggle('sel', i===elegida);
+      });
+    }
+
+    /* ---------- MEDIDORES (velocímetros) ---------- */
+    var GAUGES = {
+      velocidad: { title:'Ritmo del profe', labels:['Muy\nlento','Lento','Justo','Rápido','Muy\nrápido'],
+        grad:'<stop offset="0%" stop-color="#e0563a"/><stop offset="25%" stop-color="#e0a92a"/><stop offset="50%" stop-color="#3cc878"/><stop offset="75%" stop-color="#e0a92a"/><stop offset="100%" stop-color="#e0563a"/>',
+        caps:['Van muy lento','Un poco lento','Ritmo justo','Un poco rápido','Van muy rápido'] },
+      termometro: { title:'¿Se entiende?', labels:['Perdido','Cuesta','Más\no menos','Bien','Todo\nclaro'],
+        grad:'<stop offset="0%" stop-color="#e0563a"/><stop offset="50%" stop-color="#e0a92a"/><stop offset="100%" stop-color="#3cc878"/>',
+        caps:['La clase está perdida','Les cuesta','Más o menos','Van bien','Todo claro'] }
+    };
+    var GAUGE_ORDER = ['velocidad','termometro'];
+    var ARC = (function(){ var pts=[]; for(var a=180;a>=0;a-=5){ var r=a*Math.PI/180; pts.push((100+84*Math.cos(r)).toFixed(1)+' '+(100-84*Math.sin(r)).toFixed(1)); } return 'M'+pts.join(' L'); })();
+    function gaugeNode(tipo){
+      var cfg=GAUGES[tipo];
+      var wrap=document.createElement('div'); wrap.className='gauge'; wrap.setAttribute('data-g',tipo);
+      wrap.innerHTML =
+        '<div class="gtitle">'+ICON.gauge+'<span>'+cfg.title+'</span></div>'
+        + '<svg class="gsvg" viewBox="0 0 200 116">'
+        +   '<defs><linearGradient id="grad-'+tipo+'" x1="0" y1="0" x2="1" y2="0">'+cfg.grad+'</linearGradient></defs>'
+        +   '<path d="'+ARC+'" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="16" stroke-linecap="round"/>'
+        +   '<path d="'+ARC+'" fill="none" stroke="url(#grad-'+tipo+')" stroke-width="11" stroke-linecap="round"/>'
+        +   '<g data-needle transform="rotate(0,100,100)"><polygon points="96.5,100 100,28 103.5,100" fill="#fff"/></g>'
+        +   '<circle cx="100" cy="100" r="6.5" fill="#0c1626" stroke="#fff" stroke-width="2.4"/>'
+        + '</svg>'
+        + '<div class="gcap" data-cap>Tocá cómo lo sentís</div>'
+        + '<div class="glevels">'+cfg.labels.map(function(l,i){ return '<button data-i="'+i+'">'+escapeHtml(l)+'</button>'; }).join('')+'</div>';
+      wrap.querySelectorAll('.glevels button').forEach(function(b){ b.addEventListener('click', function(){ votar(tipo, +b.getAttribute('data-i')); }); });
+      return wrap;
+    }
+    // El velocímetro refleja SÓLO lo que ESTE alumno eligió (nunca los votos de otros).
+    function updateGauge(tipo, mine){
+      var wrap=$('gaugebar').querySelector('[data-g="'+tipo+'"]'); if(!wrap) return;
+      var v = mine>=0 ? mine/4 : 0.5; // sin voto propio => aguja al centro (neutro)
+      var g=wrap.querySelector('[data-needle]'); if(g) g.setAttribute('transform','rotate('+(180*v-90).toFixed(1)+',100,100)');
+      wrap.querySelectorAll('.glevels button').forEach(function(b,i){ b.classList.toggle('mine', i===mine); });
+      var cap=wrap.querySelector('[data-cap]'); var cfg=GAUGES[tipo];
+      if(cap) cap.textContent = mine>=0 ? cfg.caps[mine] : 'Tocá cómo lo sentís';
+    }
+    var gaugeData = {};
+    function renderGauges(){
+      var bar=$('gaugebar');
+      var tipos = GAUGE_ORDER.filter(function(t){ return gaugeData[t]; });
+      Array.prototype.slice.call(bar.querySelectorAll('.gauge')).forEach(function(n){ if(tipos.indexOf(n.getAttribute('data-g'))<0) n.remove(); });
+      tipos.forEach(function(t){ if(!bar.querySelector('[data-g="'+t+'"]')) bar.appendChild(gaugeNode(t)); });
+      bar.classList.toggle('hidden', tipos.length===0);
+      document.body.classList.toggle('hasgauge', tipos.length>0);
+      tipos.forEach(function(t){ var mine = (t in votadoLocal)?votadoLocal[t]:-1; updateGauge(t, mine); });
+    }
+    // plegar / desplegar el panel lateral (solaparlo). En pantallas chicas arranca plegado para no tapar el formulario.
+    (function(){ var h=$('gaugeHandle'); if(h) h.addEventListener('click', function(){ $('gaugebar').classList.toggle('collapsed'); });
+      try{ if(window.matchMedia && window.matchMedia('(max-width:760px)').matches) $('gaugebar').classList.add('collapsed'); }catch(e){} })();
+
+    /* ---------- TEMPORIZADOR ---------- */
+    var tempo={activo:false,fin:0,etiqueta:''};
+    function renderTempo(){
+      var wrap=$('tempoWrap'), rem = tempo.activo ? Math.max(0, tempo.fin - Date.now()) : 0;
+      if(!tempo.activo){ $('tempoLbl').textContent='Sin temporizador activo'; $('tempoClock').textContent='—'; wrap.classList.remove('fin'); return; }
+      $('tempoLbl').textContent = tempo.etiqueta || 'Tiempo restante';
+      var s=Math.ceil(rem/1000), m=Math.floor(s/60); s=s%60;
+      $('tempoClock').textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+      wrap.classList.toggle('fin', rem<=0);
+    }
+    setInterval(renderTempo, 250);
+
+    /* ---------- polling ---------- */
+    function poll(){
+      // estado general (interacciones + clase + marca)
+      F('/state').then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok&&d.estado){
+          aplicarMarca(d.estado.marca);
+          $('claveBox').classList.toggle('hidden', !(d.estado.claveRequerida && !clave));
+          interAll = d.estado.interacciones||{};
+          var nuevos=ORDEN.filter(function(id){ return interAll[id]; }); if(nuevos.length===0) nuevos=['preguntas'];
+          if(nuevos.join(',')!==activos.join(',')){ activos=nuevos; renderRail(); }
+          if(d.estado.clase && !def.titulo) $('brandT').textContent=d.estado.clase;
+        }
+      }).catch(function(){});
+      // cuestionario
+      F('/quiz/estado').then(function(r){return r.json();}).then(function(d){ if(d&&d.ok) applyQuiz(d.estado); }).catch(function(){});
+      // encuesta (solapa)
+      if(activos.indexOf('encuesta')>=0){ F('/votacion?tipo=encuesta').then(function(r){return r.json();}).then(function(d){ if(!d||!d.ok) return; setDot('encuesta', !!(d.estado&&d.estado.abierta)); if(secActual==='encuesta') renderEncuesta(d); }).catch(function(){}); }
+      // medidores (barra inferior)
+      GAUGE_ORDER.forEach(function(tipo){
+        if(!interAll[tipo]){ if(gaugeData[tipo]){ delete gaugeData[tipo]; renderGauges(); } return; }
+        F('/votacion?tipo='+tipo).then(function(r){return r.json();}).then(function(d){
+          if(d&&d.ok && d.estado && d.estado.abierta){ gaugeData[tipo]=d; } else if(gaugeData[tipo]){ delete gaugeData[tipo]; }
+          renderGauges();
+        }).catch(function(){});
+      });
+      // temporizador
+      if(activos.indexOf('temporizador')>=0){ F('/temporizador').then(function(r){return r.json();}).then(function(d){ if(d&&d.ok&&d.estado){ tempo=d.estado; setDot('temporizador', !!(tempo.activo && (tempo.fin-Date.now())>0)); renderTempo(); } }).catch(function(){}); }
+    }
+
+    /* ---------- PRESENCIA (avisa al hub del profe que este alumno está conectado) ---------- */
+    function ping(){ F('/presence/ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sid,nombre:nombre()})}).catch(function(){}); }
+
+    renderRail();
+    getDef('default').then(function(){ poll(); setInterval(poll,2200); setInterval(function(){ getDef(loadedForm); },15000); });
+    ping(); setInterval(ping,15000);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) ping(); });
+  })();
+</script>
+</body>
+</html>
