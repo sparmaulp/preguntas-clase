@@ -1,0 +1,11 @@
+{
+  "pregunta": "¿Cómo es el ritmo del profe?",
+  "opciones": [
+    "Muy lento",
+    "Lento",
+    "Ritmo justo",
+    "Rápido",
+    "Muy rápido"
+  ],
+  "abierta": true
+}
