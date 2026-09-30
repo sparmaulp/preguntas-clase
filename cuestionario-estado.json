@@ -1,9 +1,9 @@
 {
-  "activo": false,
+  "activo": true,
   "index": 1,
   "fase": "lobby",
   "qr": true,
   "libre": false,
   "form": "default",
-  "ts": 1790810071135
+  "ts": 1790810076844
 }
