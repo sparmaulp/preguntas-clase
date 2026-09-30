@@ -1,0 +1,15 @@
+{
+  "titulo": "",
+  "preguntas": [
+    {
+      "q": "¿En cuál de estas situaciones podrías estar utilizando IA sin advertirlo?",
+      "opciones": [
+        "Al recibir recomendaciones de contenido o cuando el correo filtra mensajes no deseados.",
+        " Al fotocopiar un documento.",
+        " Al completar a mano un formulario en papel.",
+        " Al archivar un expediente impreso."
+      ],
+      "correcta": 0
+    }
+  ]
+}
