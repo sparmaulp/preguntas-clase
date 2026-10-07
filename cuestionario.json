@@ -1,24 +1,55 @@
 {
-  "titulo": "IA",
+  "titulo": "Desafío ULP - Semana 1",
   "preguntas": [
     {
       "q": "¿En cuál de estas situaciones podrías estar utilizando IA sin advertirlo?",
       "opciones": [
         "Al recibir recomendaciones de contenido o cuando el correo filtra mensajes no deseados.",
-        " Al fotocopiar un documento.",
-        " Al completar a mano un formulario en papel.",
-        " Al archivar un expediente impreso."
+        "Al fotocopiar un documento.",
+        "Al completar a mano un formulario en papel.",
+        "Al archivar un expediente impreso."
       ],
       "correcta": 0
     },
     {
       "q": "¿Cuál de las siguientes opciones describe mejor a la Inteligencia Artificial?",
       "opciones": [
-        "Una herramienta que reemplaza automáticamente el criterio profesional.",
-        " Una computadora que piensa y decide exactamente como una persona.",
-        "Un conjunto de tecnologías que realizan tareas asociadas con capacidades humanas, como reconocer patrones o generar textos."
+        "Un conjunto de tecnologías que realizan tareas asociadas con capacidades humanas, como reconocer patrones o generar textos.",
+        "Una computadora que piensa y decide exactamente como una persona.",
+        "Un programa que almacena documentos y archivos.",
+        "Una herramienta que reemplaza automáticamente el criterio profesional."
       ],
       "correcta": 0
+    },
+    {
+      "q": "¿Cuál es una tarea característica de la IA generativa?",
+      "opciones": [
+        "Crear un resumen o un borrador nuevo a partir de una instrucción.",
+        "Aplicar siempre la misma regla administrativa.",
+        "Clasificar documentos según categorías previamente aprendidas.",
+        "Confirmar por sí sola que una norma continúa vigente."
+      ],
+      "correcta": 0
+    },
+    {
+      "q": "¿Cuál es un ejemplo de IA predictiva?",
+      "opciones": [
+        "Redactar un borrador de correo.",
+        "Generar una imagen desde una descripción.",
+        "Estimar la probabilidad de que aumente la demanda de un servicio.",
+        "Aplicar una regla fija para ordenar expedientes."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "Un sistema aplica siempre las mismas condiciones previamente definidas para autorizar o rechazar una solicitud. ¿Qué enfoque representa?",
+      "opciones": [
+        "IA generativa.",
+        "IA basada en reglas.",
+        "IA predictiva.",
+        "Modelo de lenguaje."
+      ],
+      "correcta": 1
     }
   ]
 }
