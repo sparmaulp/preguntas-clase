@@ -1,4 +1,55 @@
 {
   "titulo": "Semana 2",
-  "preguntas": []
+  "preguntas": [
+    {
+      "q": "¿Cuál de estas acciones es adecuada antes de compartir información con una herramienta de IA?",
+      "opciones": [
+        "Copiar el expediente completo.",
+        "Revisar si la información es pública, interna, personal o sensible y si la herramienta está autorizada.",
+        "Compartir contraseñas si la consulta es urgente.",
+        "Suponer que todas las herramientas protegen los datos de la misma manera."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "Querés practicar cómo resumir un caso laboral sin usar información real de personas. ¿Qué opción es más adecuada?",
+      "opciones": [
+        "Copiar el caso real y pedirle a la IA que lo mantenga en secreto.",
+        "Borrar solo el nombre, aunque queden datos que permitan identificar a la persona.",
+        "Crear un caso ficticio que conserve el tipo de tarea, sin datos personales reales.",
+        "Compartir el caso en una cuenta personal para separarlo de la cuenta laboral."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "La IA sugiere que una capacitación digital se ofrezca solo a personas jóvenes porque las mayores “no aprenden tecnología”. ¿Qué corresponde hacer?",
+      "opciones": [
+        "Revisar críticamente la propuesta: contiene una generalización por edad que puede excluir injustamente.",
+        "Aceptar la propuesta porque fue generada a partir de muchos datos.",
+        "Mantener la selección y cambiar únicamente el tono del texto.",
+        "Pedir que explique la misma propuesta con más seguridad."
+      ],
+      "correcta": 0
+    },
+    {
+      "q": "La IA menciona un requisito de un trámite que no aparece en la documentación disponible. ¿Qué conviene hacer?",
+      "opciones": [
+        "Usarlo porque está bien redactado.",
+        "Pedirle que lo repita hasta que parezca seguro.",
+        "Verificarlo en una fuente oficial o consultar al área responsable.",
+        "Publicarlo y corregirlo solamente si alguien reclama."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "¿Cuál de estas tareas requiere mayor precaución por sus posibles consecuencias para las personas?",
+      "opciones": [
+        "Proponer títulos para una capacitación interna.",
+        "Sugerir quién debería recibir un beneficio público.",
+        "Reordenar una lista de materiales de oficina.",
+        "Preparar un borrador de invitación a una reunión."
+      ],
+      "correcta": 1
+    }
+  ]
 }
