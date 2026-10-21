@@ -1,4 +1,55 @@
 {
   "titulo": "Semana 3",
-  "preguntas": []
+  "preguntas": [
+    {
+      "q": "Al solicitarle a la IA la redacción de un correo formal a partir de notas breves, ¿qué sucede si NO se especifica el “Destinatario”?",
+      "opciones": [
+        "La IA no genera ninguna respuesta y da un error de sistema.",
+        "La IA decide por su cuenta a quién le escribe y puede usar un tono que no corresponde (por ejemplo, un tono interno para un mensaje dirigido a la ciudadanía).",
+        "El correo se envía automáticamente al destinatario por defecto del organismo.",
+        "La IA siempre redactará en un formato de tabla ejecutable."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "Si necesitás que el resultado de un prompt sea fácilmente utilizable para comparar dos o más opciones de forma clara, ¿qué formato de salida es más recomendable solicitar?",
+      "opciones": [
+        "Un párrafo continuo sin puntos de separación.",
+        "Un borrador de correo electrónico con saludo formal.",
+        "Una tabla comparativa con columnas bien definidas.",
+        "Una lista de preguntas frecuentes (FAQ)."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "¿Cuál de los siguientes es el uso adecuado del elemento “ROL” dentro de la plantilla estructurada de un prompt?",
+      "opciones": [
+        "Asignar a la IA la firma legal del documento para que quede validado institucionalmente.",
+        "Orientar la perspectiva o enfoque desde el cual la IA abordará la redacción (ej. “Actuá como asistente de redacción”).",
+        "Reemplazar las instrucciones concretas de la tarea por una descripción del puesto laboral.",
+        "Definir el destinatario final que recibirá la comunicación."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "¿Cuál es el riesgo de añadir un contexto demasiado extenso o irrelevante en la redacción de un prompt?",
+      "opciones": [
+        "Provoca que el sistema de IA bloquee automáticamente la cuenta del usuario.",
+        "Dificulta la claridad del pedido y puede desviar a la IA del objetivo principal de la tarea.",
+        "Obliga a la IA a responder únicamente con imágenes en lugar de texto.",
+        "Garantiza siempre una respuesta más precisa e impecable."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "¿Por qué es fundamental revisar los datos fijos (fechas, horarios, nombres) en el resultado generado por la IA, aun cuando se incluyó una restricción para que los conservara?",
+      "opciones": [
+        "Porque la restricción ayuda, pero no garantiza que la IA conserve los datos: una persona igual tiene que revisarlos.",
+        "Porque los modelos de IA siempre cambian las fechas por defecto a la fecha actual.",
+        "Porque, al agregar una restricción, la IA deja de leer los datos.",
+        "Porque las restricciones son únicamente etiquetas visuales que el modelo no procesa."
+      ],
+      "correcta": 0
+    }
+  ]
 }
