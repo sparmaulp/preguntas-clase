@@ -6,8 +6,7 @@
       "opciones": [
         "La IA no genera ninguna respuesta y da un error de sistema.",
         "La IA decide por su cuenta a quién le escribe y puede usar un tono que no corresponde (por ejemplo, un tono interno para un mensaje dirigido a la ciudadanía).",
-        "El correo se envía automáticamente al destinatario por defecto del organismo.",
-        "La IA siempre redactará en un formato de tabla ejecutable."
+        "El correo se envía automáticamente al destinatario por defecto del organismo."
       ],
       "correcta": 1
     },
