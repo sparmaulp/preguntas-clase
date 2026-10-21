@@ -10,7 +10,7 @@
   "interacciones": {
     "preguntas": false,
     "cuestionario": true,
-    "encuesta": false,
+    "encuesta": true,
     "termometro": false,
     "velocidad": false,
     "temporizador": false
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792015734128
+  "ts": 1792608819713
 }
