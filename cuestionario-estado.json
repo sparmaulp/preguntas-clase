@@ -1,9 +1,9 @@
 {
   "activo": true,
   "index": 0,
-  "fase": "cerrada",
+  "fase": "revelada",
   "qr": true,
   "libre": false,
   "form": "sem3",
-  "ts": 1792619224392
+  "ts": 1792619226021
 }
