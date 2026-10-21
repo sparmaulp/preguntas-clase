@@ -8,11 +8,11 @@
   "qr": false,
   "pantalla": "cuestionario",
   "interacciones": {
-    "preguntas": false,
+    "preguntas": true,
     "cuestionario": true,
     "encuesta": true,
-    "termometro": true,
-    "velocidad": true,
+    "termometro": false,
+    "velocidad": false,
     "temporizador": false
   },
   "marca": {
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792608821050
+  "ts": 1792608822153
 }
