@@ -1,6 +1,6 @@
 {
   "clase": "Capacitación en IA",
-  "tema": "Módulo 1. Introducción a la Inteligencia Artificial",
+  "tema": "Módulo 2. Introducción a la Inteligencia Artificial",
   "modo": "enjambre",
   "index": -1,
   "visible": false,
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792610416225
+  "ts": 1792610958459
 }
