@@ -18,10 +18,10 @@
   "marca": {
     "institucion": "ulp",
     "logoUrl": "",
-    "color": "",
-    "color2": ""
+    "color": "#f6a01a",
+    "color2": "#e08800"
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792610958459
+  "ts": 1792614347493
 }
