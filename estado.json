@@ -9,10 +9,10 @@
   "pantalla": "cuestionario",
   "interacciones": {
     "preguntas": false,
-    "cuestionario": true,
-    "encuesta": true,
+    "cuestionario": false,
+    "encuesta": false,
     "termometro": false,
-    "velocidad": true,
+    "velocidad": false,
     "temporizador": false
   },
   "marca": {
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792610415670
+  "ts": 1792610417438
 }
