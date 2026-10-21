@@ -11,8 +11,8 @@
     "preguntas": false,
     "cuestionario": true,
     "encuesta": true,
-    "termometro": false,
-    "velocidad": false,
+    "termometro": true,
+    "velocidad": true,
     "temporizador": false
   },
   "marca": {
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792608819713
+  "ts": 1792608821050
 }
