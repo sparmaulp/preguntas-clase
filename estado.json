@@ -8,7 +8,7 @@
   "qr": false,
   "pantalla": "cuestionario",
   "interacciones": {
-    "preguntas": false,
+    "preguntas": true,
     "cuestionario": true,
     "encuesta": true,
     "termometro": false,
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792608820483
+  "ts": 1792608970286
 }
