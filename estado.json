@@ -9,7 +9,7 @@
   "pantalla": "cuestionario",
   "interacciones": {
     "preguntas": false,
-    "cuestionario": false,
+    "cuestionario": true,
     "encuesta": false,
     "termometro": false,
     "velocidad": false,
@@ -23,5 +23,5 @@
   },
   "mostrarClave": false,
   "claveTexto": "",
-  "ts": 1792614530042
+  "ts": 1792614533865
 }
