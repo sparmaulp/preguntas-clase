@@ -1,0 +1,11 @@
+{
+  "pregunta": "¿Se entiende el tema?",
+  "opciones": [
+    "Perdido",
+    "Me cuesta",
+    "Más o menos",
+    "Bien",
+    "Todo claro"
+  ],
+  "abierta": true
+}
