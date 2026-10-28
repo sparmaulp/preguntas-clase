@@ -1,9 +1,9 @@
 {
   "activo": true,
-  "index": 2,
-  "fase": "lobby",
+  "index": 0,
+  "fase": "abierta",
   "qr": true,
   "libre": false,
   "form": "sem4",
-  "ts": 1793225326419
+  "ts": 1793225336215
 }
