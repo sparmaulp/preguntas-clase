@@ -1,4 +1,55 @@
 {
   "titulo": "Semana 4",
-  "preguntas": []
+  "preguntas": [
+    {
+      "q": "Revisás un correo que la IA redactó a partir de las notas de una reunión y ves que incluye una fecha de entrega de informes que NO figuraba en esas notas. ¿Qué tipo de error es?",
+      "opciones": [
+        "Un ajuste de estilo o formato.",
+        "La IA agregó un dato que no estaba en la fuente (un dato inventado).",
+        "Una mejora automática requerida por el sistema.",
+        "Un error en la plantilla del prompt."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "Si un borrador elaborado por IA incluye una propuesta aprobada cuando la fuente original indicaba únicamente que la propuesta estaba “pendiente de análisis”, ¿qué acción corresponde realizar antes de usar el texto?",
+      "opciones": [
+        "Dejar el texto como está para no demorar la comunicación institucional.",
+        "Borrar toda la propuesta del correo final.",
+        "Pedirle a la IA que modifique la afirmación para reflejar con precisión el estado real (“pendiente de análisis”) antes de su emisión.",
+        "Asumir que la IA confirmó la aprobación por otras vías."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "¿Cuál de los siguientes es un ejemplo claro de iteración para corregir una salida previa?",
+      "opciones": [
+        "“Abrí un chat nuevo y redactá otro mensaje diferente”.",
+        "“Analizá mi instrucción y decime qué campos faltan definir”.",
+        "“Del correo anterior, cambiá el tono a uno más cordial, conservá la fecha de la reunión y eliminá el plazo que agregaste”.",
+        "“¿Estás seguro de que esta respuesta es correcta?”."
+      ],
+      "correcta": 2
+    },
+    {
+      "q": "¿En qué consiste la técnica de prompts encadenados en una tarea administrativa?",
+      "opciones": [
+        "En enviar el mismo prompt a tres herramientas de IA distintas para comparar sus respuestas en tiempo real.",
+        "En dividir un procedimiento complejo en pasos sucesivos, usando el resultado revisado de una etapa como punto de partida de la siguiente.",
+        "En escribir un único prompt de más de 1000 palabras que incluya todas las preguntas posibles sobre un tema.",
+        "En programar que la IA envíe correos automáticos sin revisión intermedia."
+      ],
+      "correcta": 1
+    },
+    {
+      "q": "¿Qué beneficio aporta realizar un contraste humano entre la respuesta de la IA y el documento de origen?",
+      "opciones": [
+        "Garantizar que el sistema de IA aprenda automáticamente la normativa de la oficina.",
+        "Asegurar que no se haya cambiado el sentido, alterado datos fijos ni omitido pendientes importantes antes de la entrega final.",
+        "Hacer que la respuesta de la IA sea más larga y detallada.",
+        "Reemplazar el uso de restricciones dentro del prompt."
+      ],
+      "correcta": 1
+    }
+  ]
 }
